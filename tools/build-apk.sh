@@ -7,7 +7,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK:-$ROOT/.apkbuild}"
 TOOLS="$WORK/tools"
 mkdir -p "$TOOLS"
-fetch() { [ -s "$TOOLS/$1" ] || curl -fsSL -o "$TOOLS/$1" "$2"; }
+fetch() {
+  [ -s "$TOOLS/$1" ] && return 0
+  for i in 1 2 3 4 5; do  # mirrors and proxies sometimes answer 404 for a moment
+    curl -fsSL -o "$TOOLS/$1" "$2" && return 0
+    sleep $((i * 2))
+  done
+  echo "Could not download $2" >&2
+  return 1
+}
 fetch apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
 fetch signer.jar https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
 fetch dx.jar https://repo1.maven.org/maven2/com/jakewharton/android/repackaged/dalvik-dx/9.0.0_r3/dalvik-dx-9.0.0_r3.jar

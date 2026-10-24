@@ -18,6 +18,8 @@ resourcesAreCompressed: false
 sharedLibrary: false
 sparseResources: false
 doNotCompress:
+- resources.arsc
+- arsc
 - glb
 - png
 - jpg
