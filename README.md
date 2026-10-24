@@ -113,6 +113,21 @@ the sunglasses smiley on top, the black tile ceiling with the big fabric duct an
 over high-back leather booths, blue pool tables, the reclaimed-wood fireplace lounge, the curved bar and the
 glass-fronted sales counter.
 
+How the models are made:
+
+- **People** (`blender/people.py`) are lofted from cross-section rings, so every body is one smooth shape with real
+  clothing layers: crew collars, sleeve hems, pants cuffs, sneakers with soles and laces, mitten hands with thumbs.
+  Faces have eye whites, irises with a highlight, relaxed eyelids, eyebrows, a nose and a smile. One rig is shared by
+  everyone; the game recolours skin, clothes, hair, hats and shoes and switches between 8 hairstyles (short, long,
+  bun, ponytail, curly, buzz, beanie, cap), 4 tops (tee, long sleeve, hoodie, jacket), glasses, beards and the staff
+  apron.
+- **Props** (`blender/props.py`) are mostly turned on a lathe: glasses have real walls and rims, plates have a foot
+  and a well, cream is swirled. Dutch details: verse muntthee with a mint sprig, a speculaas with the coffee,
+  appeltaart with a lattice top, fries with a wooden vorkje.
+- **Furniture** (`blender/shop.py`) uses soft-furnishing helpers: channel-tufted booth and sofa backs, stuffed seat
+  cushions, leather poufs with a button, turned table pedestals, a tablet till and a card terminal on the counter,
+  apothecary jars with labels on the back shelves.
+
 ### Tests
 
 ```bash

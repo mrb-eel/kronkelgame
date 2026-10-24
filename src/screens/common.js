@@ -245,6 +245,22 @@ export function portrait(gui, x, y, w, h, look) {
   c.beginPath();
   c.ellipse(cx, y + h * 1.02, w * 0.46, h * 0.32, 0, 0, Math.PI * 2);
   c.fill();
+  if (look.top === 'jacket') {
+    // open jacket: two panels over the shirt
+    c.fillStyle = look.jacket || '#2a2f3a';
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.ellipse(cx + side * w * 0.3, y + h * 1.04, w * 0.24, h * 0.33, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+  } else if (look.top === 'hoodie') {
+    // hood rolled around the neck
+    c.strokeStyle = look.shirt;
+    c.lineWidth = w * 0.09;
+    c.beginPath();
+    c.ellipse(cx, y + h * 0.74, w * 0.2, h * 0.07, 0, Math.PI * 0.05, Math.PI * 0.95, true);
+    c.stroke();
+  }
   c.fillStyle = look.skin;
   c.fillRect(cx - headR * 0.35, hy + headR * 0.6, headR * 0.7, headR * 0.7);
   c.beginPath();
@@ -265,6 +281,19 @@ export function portrait(gui, x, y, w, h, look) {
       c.arc(cx + Math.cos(a) * headR * 0.95, hy - headR * 0.25 + Math.sin(a) * headR * 0.85, headR * 0.38, 0, Math.PI * 2);
       c.fill();
     }
+  } else if (s === 'hair_buzz') {
+    c.globalAlpha = 0.75;
+    c.beginPath();
+    c.ellipse(cx, hy - headR * 0.3, headR * 1.0, headR * 0.78, 0, Math.PI, 0);
+    c.fill();
+    c.globalAlpha = 1;
+  } else if (s === 'hair_pony') {
+    c.beginPath();
+    c.ellipse(cx, hy - headR * 0.25, headR * 1.04, headR * 0.86, 0, Math.PI, 0);
+    c.fill();
+    c.beginPath();
+    c.ellipse(cx + headR * 1.0, hy + headR * 0.2, headR * 0.22, headR * 0.6, 0.3, 0, Math.PI * 2);
+    c.fill();
   } else if (s === 'hair_bun') {
     c.beginPath();
     c.ellipse(cx, hy - headR * 0.25, headR * 1.05, headR * 0.85, 0, Math.PI, 0);

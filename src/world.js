@@ -7,9 +7,10 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { clamp, damp } from './util.js';
 
 const TRANSPARENT = new Set(['Glass', 'GlassTint', 'Etched', 'Balloon', 'Tea', 'Ice', 'Baggie']);
-const RECOLOR = { skin: 'Skin', shirt: 'Shirt', pants: 'Pants', hair: 'Hair', hat: 'Hat', shoes: 'Shoes' };
-const ACCESSORIES = ['hair_short', 'hair_long', 'hair_bun', 'hair_curly', 'hat_beanie', 'hat_cap', 'glasses', 'beard',
-  'apron'];
+const RECOLOR = { skin: 'Skin', shirt: 'Shirt', pants: 'Pants', hair: 'Hair', hat: 'Hat', shoes: 'Shoes', jacket: 'Jacket' };
+const HAIR_NODES = ['hair_short', 'hair_long', 'hair_bun', 'hair_curly', 'hair_pony', 'hair_buzz', 'hat_beanie', 'hat_cap'];
+const TOP_NODES = ['longsleeve', 'hoodie', 'jacket'];
+const ACCESSORIES = [...HAIR_NODES, ...TOP_NODES, 'tee_sleeves', 'glasses', 'beard', 'apron'];
 
 export function detectQuality() {
   const mobile = /Android|iPhone|iPad|iPod|Mobile|Quest|Pico/i.test(navigator.userAgent) ||
@@ -685,6 +686,9 @@ class Person {
       if (!node) continue;
       let vis = false;
       if (name === look.style) vis = true;
+      if (TOP_NODES.includes(name)) vis = name === look.top;
+      // the t-shirt sleeves hide under hoodies and jackets
+      if (name === 'tee_sleeves') vis = look.top !== 'hoodie' && look.top !== 'jacket';
       if (name === 'glasses') vis = !!look.glasses;
       if (name === 'beard') vis = !!look.beard;
       if (name === 'apron') vis = !!look.apron;

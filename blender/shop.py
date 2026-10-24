@@ -72,6 +72,129 @@ def prism_roof(name, x0, x1, z0, z1, y0, ridge, mat_):
 
 
 # ----------------------------------------------------------------------------
+# Soft-furnishing and turned-wood helpers (all in game coords, y up)
+# ----------------------------------------------------------------------------
+
+def lathe(name, profile, mat_, center=(0, 0, 0), segs=20, smooth=40):
+    """Revolve [(radius, height)] around the vertical axis through `center`. Radius 0 closes an end."""
+    bm = bmesh.new()
+    c = G(*center)
+    rows = []
+    for r, y in profile:
+        if r <= 1e-6:
+            rows.append([bm.verts.new(c + Vector((0, 0, y)))])
+        else:
+            rows.append([bm.verts.new(c + Vector((math.cos(k / segs * math.tau) * r, math.sin(k / segs * math.tau) * r, y)))
+                         for k in range(segs)])
+    for a, b in zip(rows, rows[1:]):
+        if len(a) == 1 and len(b) == 1:
+            continue
+        for k in range(segs):
+            k2 = (k + 1) % segs
+            if len(a) == 1:
+                bm.faces.new((a[0], b[k], b[k2]))
+            elif len(b) == 1:
+                bm.faces.new((a[k], b[0], a[k2]))
+            else:
+                bm.faces.new((a[k], a[k2], b[k2], b[k]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _finish(bm, name, mat_, smooth)
+
+
+def arc_pad(name, cx, cz, r_mid, a0, a1, y0, y1, depth, mat_, segs=10, csegs=12, p=3.0, lean=0.0, taper=0.35):
+    """A puffy upholstered pad bent around (cx, cz): channel-tufted backs, seat cushions, sofa arms.
+
+    Angles in degrees from +z toward +x (like `curved`). `lean` pushes the top outward (reclined backs);
+    `taper` slims the ends so each pad reads as a stuffed pillow.
+    """
+    bm = bmesh.new()
+    hy, ym, hd = (y1 - y0) / 2, (y0 + y1) / 2, depth / 2
+    rings = []
+    for i in range(segs + 1):
+        t = i / segs
+        a = math.radians(a0 + (a1 - a0) * t)
+        sa, ca = math.sin(a), math.cos(a)
+        e = 1.0 - taper * abs(2 * t - 1) ** 4
+        ring = []
+        for k in range(csegs):
+            th = k / csegs * math.tau
+            ct, st = math.cos(th), math.sin(th)
+            u = math.copysign(abs(ct) ** (2 / p), ct) * hd * e
+            v = math.copysign(abs(st) ** (2 / p), st) * hy * (0.9 + 0.1 * e)
+            r = r_mid + u + lean * (v + hy) / (2 * hy)
+            ring.append(bm.verts.new(G(cx + sa * r, ym + v, cz + ca * r)))
+        rings.append(ring)
+    for a, b in zip(rings, rings[1:]):
+        for k in range(csegs):
+            k2 = (k + 1) % csegs
+            bm.faces.new((a[k], b[k], b[k2], a[k2]))
+    for ring in (rings[0], rings[-1]):
+        cv = bm.verts.new(sum((v.co for v in ring), Vector()) / len(ring))
+        for k in range(csegs):
+            bm.faces.new((ring[k], ring[(k + 1) % csegs], cv))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _finish(bm, name, mat_, 60)
+
+
+def channels(out, name, cx, cz, r_mid, a0, a1, y0, y1, depth, mat_, n, gap=1.2, lean=0.08):
+    """Channel-tufted back: n vertical stuffed pleats side by side."""
+    step = (a1 - a0) / n
+    for k in range(n):
+        out.append(arc_pad(f"{name}{k}", cx, cz, r_mid, a0 + k * step + gap / 2, a0 + (k + 1) * step - gap / 2, y0, y1,
+                           depth, mat_, 4, 12, 2.4, lean, 0.25))
+
+
+def squircle(name, center, size, mat_, p=4.0, rot_y=0.0, segs=16, rings=10):
+    """Rounded box (superellipsoid): cushions, pouf tops, device bodies."""
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=segs, v_segments=rings, radius=1.0)
+    sx, sy, sz = size[0] / 2, size[2] / 2, size[1] / 2  # blender x, y(depth), z(up)
+    for v in bm.verts:
+        n = v.co.normalized()
+        v.co = Vector((math.copysign(abs(n.x) ** (2 / p), n.x) * sx, math.copysign(abs(n.y) ** (2 / p), n.y) * sy,
+                       math.copysign(abs(n.z) ** (2 / p), n.z) * sz))
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(rot_y, 3, "Z"), verts=bm.verts)
+    bmesh.ops.translate(bm, vec=G(*center), verts=bm.verts)
+    return _finish(bm, name, mat_, 50)
+
+
+def xbox(name, center, size, mat_, bevel=0.0, yaw=0.0, pitch=0.0):
+    """Box with yaw (around up) and pitch (tilt back) in game space: screens, terminals."""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=Vector((size[0], size[2], size[1])), verts=bm.verts)
+    if bevel > 0:
+        bmesh.ops.bevel(bm, geom=list(bm.edges), offset=min(bevel, min(size) * 0.45), segments=2, affect="EDGES",
+                        profile=0.5)
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(pitch, 3, "X"), verts=bm.verts)
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(yaw, 3, "Z"), verts=bm.verts)
+    bmesh.ops.translate(bm, vec=G(*center), verts=bm.verts)
+    return _finish(bm, name, mat_, 30 if bevel > 0 else None)
+
+
+def leaf_blade(name, base, yaw, length, width, mat_, pitch=0.9, droop=1.6, fold=0.3, n=8):
+    """A long tropical leaf: arched midrib, widest past the middle, folded along the rib."""
+    bm = bmesh.new()
+    d = Vector((math.sin(yaw), 0, math.cos(yaw)))
+    side = Vector((math.cos(yaw), 0, -math.sin(yaw)))
+    pos = Vector(base)
+    rows = []
+    for i in range(n + 1):
+        t = i / n
+        ang = pitch - droop * t * t
+        w = width * math.sin(math.pi * min(1.0, t ** 0.75)) * (1 if i < n else 0.05)
+        mid = pos.copy()
+        rows.append([bm.verts.new(G(*(mid + side * w - Vector((0, w * fold, 0))))), bm.verts.new(G(*mid)),
+                     bm.verts.new(G(*(mid - side * w - Vector((0, w * fold, 0)))))])
+        step = length / n
+        pos = pos + (d * math.cos(ang) + Vector((0, math.sin(ang), 0))) * step
+    for a, b in zip(rows, rows[1:]):
+        bm.faces.new((a[0], a[1], b[1], b[0]))
+        bm.faces.new((a[1], a[2], b[2], b[1]))
+    return _finish(bm, name, mat_, 70)
+
+
+# ----------------------------------------------------------------------------
 # Materials
 # ----------------------------------------------------------------------------
 M = {}
@@ -162,6 +285,16 @@ def materials():
     M["church"] = mat("ChurchStone", "#b7a37f", 0.9)
     M["churchroof"] = mat("ChurchRoof", "#4b5e55", 0.7, 0.3)
     M["candle"] = mat("CandleLeather", "#8a4a22", 0.6)
+    M["wax"] = mat("Wax", "#f3e6c8", 0.6)
+    M["button"] = mat("Button", "#1a1c20", 0.4)
+    M["label"] = mat("JarLabel", "#efe6cf", 0.8)
+    M["uiyellow"] = mat("ScreenUI", "#ffd84a", 0.4, emit="#ffc814", strength=1.5)
+    M["key"] = mat("KeyGrey", "#3a3d42", 0.5)
+    M["keyred"] = mat("KeyRed", "#c8202a", 0.5)
+    M["keygreen"] = mat("KeyGreen", "#2f9a4a", 0.5)
+    M["keyyellow"] = mat("KeyYellow", "#e9b434", 0.5)
+    M["cork"] = mat("Cork", "#b88a5a", 0.95)
+    M["pocket"] = mat("PocketNet", "#141414", 0.9)
 
 
 # ----------------------------------------------------------------------------
@@ -382,10 +515,53 @@ def upper_window(out, x, y, w, h, zface, lit=False, facing=1):
 # Counters
 # ----------------------------------------------------------------------------
 
-def jar(out, name, x, y, z, content):
-    out.append(cyl(name + "g", (x, y, z), 0.075, 0.2, M["glass"], 12))
-    out.append(cyl(name + "c", (x, y + 0.01, z), 0.064, 0.12 + rnd.random() * 0.05, content, 10))
-    out.append(cyl(name + "l", (x, y + 0.2, z), 0.078, 0.03, M["black"], 12))
+def jar(out, name, x, y, z, content, size=1.0):
+    """Apothecary jar: glass with shoulders, the goods inside, a black lid with a knob and a paper label."""
+    k = size
+    out.append(lathe(name + "g", [(0, 0), (0.062 * k, 0), (0.066 * k, 0.012 * k), (0.066 * k, 0.15 * k), (0.056 * k, 0.178 * k),
+                                  (0.042 * k, 0.188 * k), (0.042 * k, 0.2 * k)], M["glass"], (x, y, z), 14))
+    fill = (0.07 + rnd.random() * 0.06) * k
+    out.append(lathe(name + "c", [(0, 0.006 * k), (0.058 * k, 0.006 * k), (0.06 * k, fill), (0.035 * k, fill + 0.012 * k),
+                                  (0, fill + 0.016 * k)], content, (x, y, z), 10))
+    out.append(lathe(name + "l", [(0, 0.198 * k), (0.047 * k, 0.198 * k), (0.048 * k, 0.222 * k), (0.03 * k, 0.228 * k),
+                                  (0.012 * k, 0.232 * k), (0.016 * k, 0.248 * k), (0, 0.252 * k)], M["black"], (x, y, z), 12))
+    out.append(boxc(name + "lab", (x, y + 0.075 * k, z + 0.066 * k), (0.07 * k, 0.05 * k, 0.003), M["label"]))
+
+
+def place(objs, pos, yaw=0.0, pitch=0.0):
+    """Move parts modelled around the origin (game coords) into place, tilted and turned."""
+    T = Matrix.Translation(G(*pos)) @ Matrix.Rotation(yaw, 4, "Z") @ Matrix.Rotation(pitch, 4, "X")
+    for o in objs:
+        o.data.transform(T)
+    return objs
+
+
+def pos_terminal(x, y, z):
+    """Tablet till on a swivel stand; the screen faces the cashier (-z) and is tilted back."""
+    base = [lathe("posbase", [(0, 0), (0.1, 0), (0.105, 0.008), (0.09, 0.016), (0.03, 0.022), (0, 0.022)], M["chrome"],
+                  (x, y, z), 20),
+            cyl("posneck", (x, y + 0.02, z), 0.018, 0.13, M["chrome"], 10)]
+    tab = [squircle("posbezel", (0, 0, 0), (0.4, 0.27, 0.03), M["black"], 6, 0, 20, 8),
+           boxc("posscreen", (0, 0, -0.0155), (0.36, 0.23, 0.002), M["screen"]),
+           boxc("posui1", (-0.09, 0.07, -0.0168), (0.15, 0.035, 0.001), M["uiyellow"]),
+           boxc("posui2", (0.09, 0.07, -0.0168), (0.12, 0.035, 0.001), M["menutext"]),
+           boxc("posui3", (-0.09, 0.0, -0.0168), (0.15, 0.06, 0.001), M["menutext"]),
+           boxc("posui4", (0.09, -0.04, -0.0168), (0.12, 0.08, 0.001), M["uiyellow"])]
+    return base + place(tab, (x, y + 0.27, z), 0.35, 0.38)
+
+
+def card_terminal(x, y, z):
+    """PIN terminal in its dock: keypad (red / yellow / green bottom row), little screen, card slot."""
+    dock = [squircle("pindock", (x, y + 0.015, z), (0.11, 0.03, 0.15), M["black"], 5)]
+    body = [squircle("pinbody", (0, 0, 0), (0.085, 0.03, 0.17), M["key"], 5, 0, 16, 8),
+            boxc("pinscreen", (0, 0.016, 0.045), (0.06, 0.002, 0.045), M["screen"])]
+    cols = [M["keyred"], M["keyyellow"], M["keygreen"]]
+    for r in range(4):
+        for c in range(3):
+            m = cols[c] if r == 3 else M["black"]
+            body.append(boxc(f"pinkey{r}{c}", (-0.022 + c * 0.022, 0.0165, -0.005 - r * 0.017), (0.016, 0.004, 0.011), m,
+                             0.0015))
+    return dock + place(body, (x, y + 0.05, z), 0.0, -0.45)
 
 
 def shop_counter():
@@ -414,14 +590,15 @@ def shop_counter():
     out.append(torus("etchring", (2.05, 1.95, pz + 0.01), 0.36, 0.008, M["etched"], 32, 4, axis="Z"))
     out.append(text("etched2", "COFFEESHOP", (2.05, 1.72, pz + 0.01), 0.07, M["etched"], 0.0))
     px_ = rx - 0.62
-    out.append(cyl("posstand", (px_, h + 0.02, rz - 0.15), 0.03, 0.12, M["black"], 10))
-    out.append(boxc("posscreen", (px_, h + 0.25, rz - 0.15), (0.36, 0.24, 0.03), M["black"], 0.01, 0.35))
-    out.append(boxc("posglow", (px_ - 0.006, h + 0.25, rz - 0.167), (0.32, 0.2, 0.005), M["screen"], 0, 0.35))
-    out.append(boxc("pinpad", (rx + 0.45, h + 0.06, rz + 0.12), (0.1, 0.06, 0.18), M["black"], 0.01))
-    out.append(boxc("pinpadscreen", (rx + 0.45, h + 0.093, rz + 0.1), (0.07, 0.005, 0.07), M["screen"]))
-    out.append(boxc("scalebase", (2.75, h + 0.05, -3.8), (0.3, 0.06, 0.26), M["black"], 0.01))
-    out.append(cyl("scaleplate", (2.75, h + 0.08, -3.83), 0.12, 0.012, M["steel"], 20))
+    out += pos_terminal(px_, h + 0.02, rz - 0.15)
+    out += card_terminal(rx + 0.45, h + 0.02, rz + 0.12)
+    out.append(squircle("printer", (px_ + 0.32, h + 0.08, rz - 0.1), (0.15, 0.12, 0.19), M["black"], 5, 0.35))
+    out.append(xbox("printerpaper", (px_ + 0.31, h + 0.16, rz - 0.06), (0.08, 0.06, 0.002), M["paper"], 0, 0.35, -0.3))
+    out.append(squircle("scalebase", (2.75, h + 0.05, -3.8), (0.3, 0.06, 0.26), M["black"], 6))
+    out.append(lathe("scaleplate", [(0, 0.0), (0.125, 0.0), (0.13, 0.012), (0.12, 0.014), (0, 0.012)], M["steel"],
+                     (2.75, h + 0.08, -3.83), 24))
     out.append(boxc("scaledisp", (2.75, h + 0.06, -3.95), (0.14, 0.03, 0.02), M["screen"]))
+    out.append(text("scaletext", "0.0g", (2.75, h + 0.056, -3.961), 0.022, M["uiyellow"], 0.0, facing="back"))
     out.append(cyl("tipjar", (3.05, h + 0.02, -3.55), 0.07, 0.18, M["glass"], 14))
     out.append(cyl("tipcoins", (3.05, h + 0.025, -3.55), 0.06, 0.04, M["coins"], 14))
     out.append(boxc("idsign", (4.75, h + 0.13, -3.5), (0.32, 0.2, 0.012), M["white"], 0.005))
@@ -429,7 +606,7 @@ def shop_counter():
     out.append(text("idsigntext2", "ALTIJD", (4.75, h + 0.08, -3.49), 0.045, M["black"], 0.0))
     out.append(box("display", (5.55, h + 0.02, z0 + 0.12), (6.5, h + 0.4, z1 - 0.05), M["glass"]))
     for i in range(3):
-        jar(out, f"djar{i}", 5.75 + i * 0.3, h + 0.03, -3.8, M["weed"] if i != 1 else M["hash"])
+        jar(out, f"djar{i}", 5.75 + i * 0.3, h + 0.03, -3.8, M["weed"] if i != 1 else M["hash"], 1.25)
     out.append(box("backcab", (x0, 0, -6), (x1, 0.95, -5.5), M["dark"], 0.02))
     out.append(box("backcabtop", (x0 - 0.03, 0.95, -6), (x1 + 0.03, 1.0, -5.45), M["oak"]))
     for s, y in enumerate((1.3, 1.72)):
@@ -452,6 +629,15 @@ def shop_counter():
     out.append(text("menufoot", "PRIJS PER GRAM  ·  MAX 5 GRAM  ·  18+", (4.1, 2.1, -5.865), 0.06, M["menutext"], 0.0,
                     font_kind="bold"))
     return out
+
+
+def bar_stool(name, x, y0, z, h=0.72):
+    return [lathe(name + "base", [(0, 0), (0.2, 0), (0.205, 0.01), (0.18, 0.025), (0.05, 0.05), (0, 0.05)], M["chrome"],
+                  (x, y0, z), 20),
+            cyl(name + "leg", (x, y0 + 0.04, z), 0.028, h - 0.06, M["chrome"], 10),
+            torus(name + "ring", (x, y0 + 0.3, z), 0.16, 0.011, M["chrome"], 20, 6),
+            lathe(name + "seat", [(0, h - 0.02), (0.17, h - 0.02), (0.195, h), (0.2, h + 0.03), (0.185, h + 0.06),
+                                  (0.12, h + 0.075), (0, h + 0.078)], M["leather2"], (x, y0, z), 20)]
 
 
 def bar():
@@ -505,10 +691,7 @@ def bar():
         out.append(text(f"chalk{i}", t, (-5.65, 2.9 - i * 0.12, -5.935), 0.07, M["chalk"], 0.0))
     out.append(text("chalkhours", "KEUKEN 12-22", (-5.65, 2.35, -5.935), 0.055, M["chalk"], 0.0))
     for x, z in ((-6.15, -3.75), (-1.7, -3.75)):
-        out.append(cyl(f"stoolleg{x}", (x, 0, z), 0.03, 0.72, M["chrome"], 8))
-        out.append(cyl(f"stoolbase{x}", (x, 0, z), 0.18, 0.02, M["chrome"], 14))
-        out.append(torus(f"stoolring{x}", (x, 0.3, z), 0.16, 0.012, M["chrome"], 16, 6))
-        out.append(cyl(f"stoolseat{x}", (x, 0.72, z), 0.19, 0.07, M["leather2"], 16))
+        out += bar_stool(f"stool{x}", x, 0, z)
     return out
 
 
@@ -538,29 +721,47 @@ def kitchen():
 # ----------------------------------------------------------------------------
 
 def pouf(out, name, x, y0, z, yaw):
-    out.append(boxc(name + "base", (x, y0 + 0.14, z), (0.42, 0.28, 0.42), M["oak"], 0.01, yaw))
-    out.append(boxc(name + "top", (x, y0 + 0.36, z), (0.44, 0.16, 0.44), M["leather2"], 0.04, yaw))
+    """Leather cube pouf on an oak base, soft top with a tufting button."""
+    out.append(boxc(name + "base", (x, y0 + 0.13, z), (0.4, 0.26, 0.4), M["oak"], 0.02, yaw))
+    out.append(boxc(name + "kick", (x, y0 + 0.02, z), (0.36, 0.04, 0.36), M["wdark"], 0.005, yaw))
+    out.append(squircle(name + "top", (x, y0 + 0.345, z), (0.44, 0.19, 0.44), M["leather2"], 3.6, yaw, 16, 10))
+    out.append(sphere(name + "btn", (x, y0 + 0.437, z), 0.014, M["button"], 8, 5, (1, 0.5, 1)))
 
 
 def candle(out, tid, x, y, z):
-    out.append(cyl(f"{tid}candle", (x, y, z), 0.05, 0.12, M["candle"], 12, caps=False))
-    out.append(cyl(f"{tid}candleb", (x, y, z), 0.052, 0.015, M["chrome"], 12))
-    out.append(sphere(f"{tid}flame", (x, y + 0.06, z), 0.018, M["bulb"], 6, 4))
+    """Tea light in a ribbed glass votive."""
+    out.append(lathe(f"{tid}votive", [(0, 0), (0.045, 0), (0.05, 0.02), (0.052, 0.08), (0.048, 0.085), (0.046, 0.08),
+                                      (0.043, 0.006), (0, 0.006)], M["glass"], (x, y, z), 14))
+    out.append(cyl(f"{tid}wax", (x, y + 0.006, z), 0.038, 0.02, M["wax"], 12))
+    out.append(sphere(f"{tid}flame", (x, y + 0.045, z), 0.012, M["bulb"], 6, 4, (1, 1.8, 1)))
 
 
 def chair(out, name, x, y0, z, rot):
+    """Black metal bistro chair with a round seat and a curved back band."""
     m = M["black"]
-    sx, sz = math.sin(rot), math.cos(rot)
-    out.append(boxc(name + "seat", (x, y0 + 0.45, z), (0.42, 0.04, 0.42), m, 0.01, rot))
-    for lx, lz in ((-0.18, -0.18), (0.18, -0.18), (-0.18, 0.18), (0.18, 0.18)):
+    out.append(squircle(name + "seat", (x, y0 + 0.455, z), (0.42, 0.04, 0.42), m, 5, rot, 16, 6))
+    for lx, lz in ((-0.17, -0.17), (0.17, -0.17), (-0.17, 0.17), (0.17, 0.17)):
         px = x + lx * math.cos(rot) + lz * math.sin(rot)
         pz = z - lx * math.sin(rot) + lz * math.cos(rot)
-        out.append(cyl(name + f"leg{lx}{lz}", (px, y0, pz), 0.018, 0.45, m, 6))
-    bx, bz = x + sx * 0.19, z + sz * 0.19
-    for off in (-0.17, 0.17):
-        out.append(cyl(name + f"post{off}", (bx + off * math.cos(rot), y0 + 0.45, bz - off * math.sin(rot)), 0.016, 0.42,
-                       m, 6))
-    out.append(boxc(name + "back", (bx, y0 + 0.8, bz), (0.4, 0.1, 0.03), m, 0.01, rot))
+        fx = x + lx * 1.15 * math.cos(rot) + lz * 1.15 * math.sin(rot)
+        fz = z - lx * 1.15 * math.sin(rot) + lz * 1.15 * math.cos(rot)
+        out.append(tube(name + f"leg{lx}{lz}", [(px, y0 + 0.44, pz), (fx, y0, fz)], 0.014, m, 6))
+    deg = math.degrees(rot)
+    out.append(arc_pad(name + "back", x, z, 0.2, deg - 38, deg + 38, y0 + 0.66, y0 + 0.84, 0.03, m, 10, 8, 4, 0.03, 0.1))
+    for off in (-0.13, 0.13):
+        bx = x + math.sin(rot) * 0.2 + off * math.cos(rot)
+        bz = z + math.cos(rot) * 0.2 - off * math.sin(rot)
+        out.append(tube(name + f"post{off}", [(bx, y0 + 0.46, bz), (bx, y0 + 0.7, bz)], 0.011, m, 6))
+
+
+def table_top(out, tid, x, y, z, r, ground, mat_=None):
+    """Round tabletop (surface at height y) with a softened edge, on a chrome pedestal with a trumpet foot."""
+    out.append(lathe(f"{tid}top", [(0, y - 0.04), (r - 0.03, y - 0.04), (r - 0.005, y - 0.03), (r, y - 0.012), (r - 0.004, y),
+                                   (r - 0.015, y + 0.004), (0, y + 0.004)], mat_ or M["table"], (x, 0, z), 32))
+    h = y - ground
+    out.append(lathe(f"{tid}ped", [(0, 0), (0.25, 0), (0.25, 0.01), (0.22, 0.02), (0.1, 0.045), (0.045, 0.1), (0.036, 0.2),
+                                   (0.036, h - 0.1), (0.05, h - 0.06), (0.11, h - 0.045), (0, h - 0.045)], M["chrome"],
+                     (x, ground, z), 16))
 
 
 def table_group(t):
@@ -569,44 +770,62 @@ def table_group(t):
     kind = t["type"]
     y0 = 0.0 if t["level"] == 0 else L["terrace"]["y"]
     yaw = t["yaw"]
+    tid = t["id"]
     if kind in ("pod", "small"):
         r = 0.42 if kind == "pod" else 0.34
-        out.append(cyl(f"{t['id']}top", (x, y0 + 0.72, z), r, 0.045, M["table"], 28))
-        out.append(cyl(f"{t['id']}leg", (x, y0, z), 0.04, 0.72, M["chrome"], 12))
-        out.append(cyl(f"{t['id']}foot", (x, y0, z), 0.24, 0.025, M["chrome"], 20))
-        candle(out, t["id"], x + 0.1, y0 + 0.765, z - 0.06)
-        out.append(cyl(f"{t['id']}ash", (x - 0.15, y0 + 0.765, z + 0.08), 0.05, 0.02, M["black"], 12))
+        table_top(out, tid, x, y0 + 0.765, z, r, y0)
+        candle(out, tid, x + 0.1, y0 + 0.769, z - 0.06)
+        out.append(lathe(f"{tid}ash", [(0, 0), (0.05, 0), (0.052, 0.02), (0.044, 0.02), (0.04, 0.008), (0, 0.008)],
+                         M["black"], (x - 0.15, y0 + 0.769, z + 0.08), 12))
     if kind == "pod":
-        out.append(curved(f"{t['id']}bench", x, z, 0.5, 0.98, yaw - 78, yaw + 78, y0, y0 + 0.36, M["oak"], 20))
-        out.append(curved(f"{t['id']}cush", x, z, 0.52, 0.98, yaw - 76, yaw + 76, y0 + 0.36, y0 + 0.47, M["leather"], 20))
-        for k, (a0, a1) in enumerate(((yaw - 78, yaw - 27), (yaw - 25, yaw + 25), (yaw + 27, yaw + 78))):
-            out.append(curved(f"{t['id']}back{k}", x, z, 0.96, 1.14, a0, a1, y0 + 0.47, y0 + 1.3, M["leather"], 8))
-        out.append(curved(f"{t['id']}backshell", x, z, 1.12, 1.15, yaw - 79, yaw + 79, y0, y0 + 0.47, M["oak"], 20))
+        # high-back booth: oak plinth, three seat cushions, channel-tufted leather back, oak shell and cap rail
+        out.append(curved(f"{tid}bench", x, z, 0.52, 0.98, yaw - 78, yaw + 78, y0, y0 + 0.3, M["oak"], 20))
+        out.append(curved(f"{tid}kick", x, z, 0.5, 0.53, yaw - 78, yaw + 78, y0, y0 + 0.06, M["wdark"], 20))
+        for k, (a0, a1) in enumerate(((yaw - 77, yaw - 26.5), (yaw - 25.5, yaw + 25.5), (yaw + 26.5, yaw + 77))):
+            out.append(arc_pad(f"{tid}cush{k}", x, z, 0.76, a0, a1, y0 + 0.29, y0 + 0.47, 0.47, M["leather"], 10, 12, 3.4,
+                               0.0, 0.12))
+        channels(out, f"{tid}back", x, z, 1.02, yaw - 78, yaw + 78, y0 + 0.46, y0 + 1.28, 0.15, M["leather"], 11, 1.2, 0.03)
+        out.append(curved(f"{tid}backshell", x, z, 1.13, 1.16, yaw - 79, yaw + 79, y0, y0 + 1.3, M["oak"], 24))
+        out.append(curved(f"{tid}cap", x, z, 1.08, 1.18, yaw - 79.5, yaw + 79.5, y0 + 1.3, y0 + 1.34, M["oak"], 24))
         for k, s in enumerate(t["seats"][2:]):
-            pouf(out, f"{t['id']}pouf{k}", s[0], y0, s[1], math.radians(s[2]))
+            pouf(out, f"{tid}pouf{k}", s[0], y0, s[1], math.radians(s[2]))
     elif kind == "small":
         for k, s in enumerate(t["seats"]):
-            pouf(out, f"{t['id']}pouf{k}", s[0], y0, s[1], math.radians(s[2]))
+            pouf(out, f"{tid}pouf{k}", s[0], y0, s[1], math.radians(s[2]))
     elif kind == "lounge":
-        out.append(boxc(f"{t['id']}ctop", (x, y0 + 0.44, z), (0.6, 0.05, 1.1), M["table"], 0.01))
+        out.append(squircle(f"{tid}ctop", (x, y0 + 0.44, z), (0.62, 0.05, 1.12), M["table"], 8))
         for dx, dz in ((-0.26, -0.5), (0.26, -0.5), (-0.26, 0.5), (0.26, 0.5)):
-            out.append(boxc(f"{t['id']}cleg{dx}{dz}", (x + dx, y0 + 0.21, z + dz), (0.04, 0.42, 0.04), M["black"]))
-        candle(out, t["id"], x, y0 + 0.465, z - 0.2)
-        out.append(boxc(f"{t['id']}menu", (x + 0.05, y0 + 0.55, z + 0.25), (0.12, 0.18, 0.02), M["black"], 0.005, 0.3))
-        out.append(curved(f"{t['id']}sofa", x, z, 0.75, 1.2, yaw - 52, yaw + 52, y0, y0 + 0.3, M["wdark"], 20))
-        out.append(curved(f"{t['id']}sofac", x, z, 0.75, 1.18, yaw - 50, yaw + 50, y0 + 0.3, y0 + 0.44, M["cream"], 20))
-        for k, (a0, a1) in enumerate(((yaw - 52, yaw - 18), (yaw - 17, yaw + 17), (yaw + 18, yaw + 52))):
-            out.append(curved(f"{t['id']}sofab{k}", x, z, 1.12, 1.3, a0, a1, y0 + 0.3, y0 + 0.85, M["cream"], 8))
+            out.append(lathe(f"{tid}cleg{dx}{dz}", [(0.022, 0), (0.03, 0.2), (0.026, 0.42), (0, 0.42)], M["black"],
+                             (x + dx, y0, z + dz), 8))
+        candle(out, tid, x, y0 + 0.465, z - 0.2)
+        out.append(xbox(f"{tid}menu", (x + 0.05, y0 + 0.55, z + 0.25), (0.12, 0.18, 0.02), M["black"], 0.005, 0.3, 0.12))
+        # curved cream leather sofa: dark plinth, three seat cushions, tufted back, rounded arms
+        out.append(curved(f"{tid}sofa", x, z, 0.76, 1.2, yaw - 52, yaw + 52, y0, y0 + 0.26, M["wdark"], 20))
+        for k, (a0, a1) in enumerate(((yaw - 50, yaw - 17.5), (yaw - 16.5, yaw + 16.5), (yaw + 17.5, yaw + 50))):
+            out.append(arc_pad(f"{tid}sofac{k}", x, z, 0.98, a0, a1, y0 + 0.25, y0 + 0.44, 0.44, M["cream"], 10, 12, 3.4,
+                               0.0, 0.12))
+        channels(out, f"{tid}sofab", x, z, 1.2, yaw - 52, yaw + 52, y0 + 0.42, y0 + 0.86, 0.16, M["cream"], 9, 1.0, 0.025)
+        out.append(curved(f"{tid}sofashell", x, z, 1.285, 1.32, yaw - 52.5, yaw + 52.5, y0 + 0.2, y0 + 0.86, M["cream"], 20))
+        out.append(curved(f"{tid}sofacap", x, z, 1.24, 1.33, yaw - 52.5, yaw + 52.5, y0 + 0.86, y0 + 0.9, M["cream"], 20))
+        for side in (-1, 1):
+            a = yaw + side * 53.5
+            out.append(arc_pad(f"{tid}arm{side}", x, z, 0.99, a - 3, a + 3, y0 + 0.24, y0 + 0.64, 0.48, M["cream"], 4, 12,
+                               3.0, 0.0, 0.3))
     else:  # terrace: metal bistro set + parasol
-        out.append(cyl(f"{t['id']}top", (x, y0 + 0.72, z), 0.46, 0.04, M["white"], 24))
-        out.append(cyl(f"{t['id']}leg", (x, y0, z), 0.045, 0.72, M["black"], 10))
-        out.append(cyl(f"{t['id']}foot", (x, y0, z), 0.26, 0.03, M["black"], 16))
-        candle(out, t["id"], x + 0.12, y0 + 0.76, z - 0.08)
+        table_top(out, tid, x, y0 + 0.761, z, 0.46, y0, M["white"])
+        candle(out, tid, x + 0.12, y0 + 0.765, z - 0.08)
         for k, s in enumerate(t["seats"]):
-            chair(out, f"{t['id']}c{k}", s[0], y0, s[1], math.radians(s[2] + 180))
+            chair(out, f"{tid}c{k}", s[0], y0, s[1], math.radians(s[2] + 180))
         if len(t["seats"]) == 4:
-            out.append(cyl(f"{t['id']}pole", (x, y0 + 0.72, z), 0.025, 1.6, M["oak"], 8))
-            out.append(cyl(f"{t['id']}parasol", (x, y0 + 2.0, z), 1.25, 0.4, M["parasol"], 16, r2=0.04, smooth=False))
+            out.append(cyl(f"{tid}pole", (x, y0 + 0.74, z), 0.022, 1.66, M["oak"], 8))
+            out.append(lathe(f"{tid}parasol", [(0, y0 + 2.46), (0.06, y0 + 2.45), (0.7, y0 + 2.25), (1.28, y0 + 2.02),
+                                               (1.28, y0 + 1.92), (1.25, y0 + 1.92), (1.24, y0 + 2.0), (0, y0 + 2.43)],
+                             M["parasol"], (x, 0, z), 8, None))
+            for k in range(8):
+                a = (k + 0.5) / 8 * math.tau
+                out.append(tube(f"{tid}rib{k}", [(x, y0 + 2.42, z), (x + math.cos(a) * 1.22, y0 + 2.0, z + math.sin(a) * 1.22)],
+                                0.008, M["oak"], 4))
+            out.append(sphere(f"{tid}finial", (x, y0 + 2.5, z), 0.04, M["oak"], 8, 6))
     return out
 
 
@@ -625,12 +844,19 @@ def pool_tables():
         out.append(boxc(f"pool{i}railS", (x, 0.81, z + 0.62), (2.4, 0.06, 0.12), M["felt"], 0.02))
         out.append(boxc(f"pool{i}railW", (x - 1.18, 0.81, z), (0.12, 0.06, 1.2), M["felt"], 0.02))
         out.append(boxc(f"pool{i}railE", (x + 1.18, 0.81, z), (0.12, 0.06, 1.2), M["felt"], 0.02))
-        for dx in (-1.1, 0, 1.1):
-            for dz in (-0.56, 0.56):
-                out.append(cyl(f"pool{i}pk{dx}{dz}", (x + dx, 0.79, z + dz), 0.06, 0.04, M["black"], 10))
-        for dx in (-1.05, 1.05):
-            for dz in (-0.55, 0.55):
-                out.append(boxc(f"pool{i}leg{dx}{dz}", (x + dx, 0.32, z + dz), (0.16, 0.64, 0.16), M["dark"], 0.02))
+        for dx in (-1.13, 0, 1.13):
+            for dz in (-0.6, 0.6):
+                out.append(lathe(f"pool{i}pk{dx}{dz}", [(0, 0.78), (0.06, 0.78), (0.065, 0.835), (0.072, 0.84), (0.05, 0.84),
+                                                       (0.045, 0.7), (0, 0.68)], M["pocket"], (x + dx, 0, z + dz), 12))
+        for dx in (-1.0, 1.0):
+            for dz in (-0.52, 0.52):
+                out.append(lathe(f"pool{i}leg{dx}{dz}", [(0.1, 0), (0.11, 0.05), (0.075, 0.1), (0.065, 0.28), (0.09, 0.42),
+                                                        (0.075, 0.54), (0.1, 0.63), (0, 0.64)], M["dark"], (x + dx, 0, z + dz),
+                                 12))
+        for k in range(3):
+            for dz in (-0.67, 0.67):
+                out.append(sphere(f"pool{i}sight{k}{dz}", (x - 0.56 + k * 0.56, 0.842, z + dz), 0.012, M["white"], 6, 4,
+                                  (1, 0.3, 1)))
         for k, c in enumerate(cols):
             bx = x + 0.4 + (k % 3) * 0.06 - (k // 3) * 0.03
             bz = z - 0.06 + (k // 3) * 0.06
@@ -728,15 +954,24 @@ def game_shelf():
 
 
 def banana_plant(out, name, x, z, size=1.0):
-    out.append(cyl(name + "basket", (x, 0, z), 0.26 * size, 0.45 * size, M["basket"], 16, r2=0.3 * size))
+    k = size
+    prof = [(0, 0)]
+    for i in range(7):
+        y = i * 0.075 * k
+        prof.append((0.26 * k + 0.04 * k * (y / (0.45 * k)) + (0.008 * k if i % 2 else 0), y))
+    prof += [(0.31 * k, 0.45 * k), (0.28 * k, 0.45 * k), (0.25 * k, 0.4 * k), (0, 0.4 * k)]
+    out.append(lathe(name + "basket", prof, M["basket"], (x, 0, z), 20))
+    out.append(cyl(name + "soil", (x, 0.38 * k, z), 0.27 * k, 0.02, M["wdark"], 16))
     for i in range(3):
-        out.append(cyl(f"{name}stem{i}", (x + (i - 1) * 0.05, 0.4 * size, z), 0.03, (0.8 + i * 0.25) * size, M["leaf2"], 6))
-    for i in range(9):
-        a = i / 9 * math.tau + rnd.random() * 0.5
-        h = (0.9 + rnd.random() * 0.8) * size
-        L_ = (0.45 + rnd.random() * 0.25) * size
-        out.append(blob(f"{name}leaf{i}", (x + math.sin(a) * L_ * 0.6, h + 0.35, z + math.cos(a) * L_ * 0.6),
-                        (0.14 * size, 0.012, L_ * 0.6), M["banana"] if i % 2 else M["leaf"], -0.5 - rnd.random() * 0.4, a))
+        sx = x + (i - 1) * 0.05
+        out.append(tube(f"{name}stem{i}", [(sx, 0.38 * k, z), (sx + (i - 1) * 0.04, (0.9 + i * 0.25) * k, z + 0.02 * i)],
+                        0.028, M["leaf2"], 6))
+    for i in range(10):
+        a = i / 10 * math.tau + rnd.random() * 0.4
+        h = (0.75 + rnd.random() * 0.75) * k
+        out.append(leaf_blade(f"{name}leaf{i}", (x + math.sin(a) * 0.05, h, z + math.cos(a) * 0.05), a,
+                              (0.55 + rnd.random() * 0.25) * k, 0.13 * k, M["banana"] if i % 2 else M["leaf"],
+                              0.9 + rnd.random() * 0.4, 1.4 + rnd.random() * 0.8))
 
 
 def pampas(out, name, x, z, pink=False):

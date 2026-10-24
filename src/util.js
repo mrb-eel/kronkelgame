@@ -69,12 +69,16 @@ const SHIRT = ['#3f7a52', '#d9772b', '#efe6cf', '#b8322f', '#6b3f8f', '#2f5b8f',
   '#c75b7a', '#8f9a3f', '#ffffff', '#2d2d4a'];
 const PANTS = ['#2d3a52', '#3b3b3b', '#4a5d7a', '#2a2a2a', '#5a4a3a', '#c9b38f', '#3f4a3a', '#6b6b6b'];
 const HAT = ['#b8322f', '#2f5b8f', '#1d4a2f', '#e9b434', '#1e1e20', '#d9772b'];
-export const HAIR_STYLES = ['hair_short', 'hair_long', 'hair_bun', 'hair_curly', 'hat_beanie', 'hat_cap', 'none'];
+const JACKET = ['#2a2f3a', '#5a3a2a', '#1e1e20', '#3f4a3a', '#7a2a2a', '#c9b38f', '#2f4a6b'];
+export const HAIR_STYLES = ['hair_short', 'hair_long', 'hair_bun', 'hair_curly', 'hair_pony', 'hair_buzz', 'hat_beanie',
+  'hat_cap', 'none'];
 
 export function randomLook(r) {
-  const style = r.weighted([['hair_short', 4], ['hair_long', 3], ['hair_bun', 2], ['hair_curly', 2],
-    ['hat_beanie', 1.5], ['hat_cap', 1.5], ['none', 0.6]]);
+  const style = r.weighted([['hair_short', 4], ['hair_long', 3], ['hair_bun', 1.5], ['hair_curly', 2], ['hair_pony', 1.5],
+    ['hair_buzz', 1.5], ['hat_beanie', 1.5], ['hat_cap', 1.5], ['none', 0.4]]);
   return {
+    top: r.weighted([['tee', 4], ['longsleeve', 2], ['hoodie', 2.5], ['jacket', 2]]),
+    jacket: r.pick(JACKET),
     skin: r.pick(SKIN),
     hair: r.pick(HAIR),
     shirt: r.pick(SHIRT),
@@ -92,6 +96,7 @@ export function randomLook(r) {
 export function staffLook(r) {
   const look = randomLook(r);
   look.apron = true;
+  look.top = r.chance(0.6) ? 'tee' : 'longsleeve';
   look.shirt = r.pick(['#efe6cf', '#1e1e20', '#ffffff', '#3f4a3a']);
   return look;
 }
