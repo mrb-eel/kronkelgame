@@ -1,0 +1,508 @@
+{
+ "_note": "Game values only. Items and prices are made up for the game and are not Kronkel's real menu.",
+ "rules": {
+  "minAge": 18,
+  "maxGrams": 5,
+  "maxStockGrams": 500,
+  "openHour": 10,
+  "closeHour": 25,
+  "kitchenOpen": 12,
+  "kitchenClose": 22
+ },
+ "weed": [
+  {
+   "id": "amnesia",
+   "name": "Amnesia Haze",
+   "kind": "Sativa",
+   "price": 12,
+   "color": "#a8c94a"
+  },
+  {
+   "id": "widow",
+   "name": "White Widow",
+   "kind": "Hybrid",
+   "price": 11,
+   "color": "#cfe0a2"
+  },
+  {
+   "id": "lemon",
+   "name": "Lemon Haze",
+   "kind": "Sativa",
+   "price": 12,
+   "color": "#e3e05a"
+  },
+  {
+   "id": "northern",
+   "name": "Northern Lights",
+   "kind": "Indica",
+   "price": 10,
+   "color": "#6f9a5b"
+  },
+  {
+   "id": "orange",
+   "name": "Orange Bud",
+   "kind": "Hybrid",
+   "price": 9,
+   "color": "#d9a04a"
+  },
+  {
+   "id": "gorilla",
+   "name": "Gorilla Glue",
+   "kind": "Hybrid",
+   "price": 13,
+   "color": "#7b8f4a",
+   "unlock": "premiumShelf"
+  },
+  {
+   "id": "wedding",
+   "name": "Wedding Cake",
+   "kind": "Indica",
+   "price": 14,
+   "color": "#b9c98f",
+   "unlock": "premiumShelf"
+  },
+  {
+   "id": "kush",
+   "name": "Kronkel Kush",
+   "kind": "Indica",
+   "price": 15,
+   "color": "#4f8f3a",
+   "unlock": "houseStrain"
+  }
+ ],
+ "hash": [
+  {
+   "id": "maroc",
+   "name": "Marokkaanse",
+   "kind": "Hasj",
+   "price": 9,
+   "color": "#a0773f"
+  },
+  {
+   "id": "afghan",
+   "name": "Afghaan",
+   "kind": "Hasj",
+   "price": 10,
+   "color": "#5e4127"
+  },
+  {
+   "id": "charas",
+   "name": "Charas",
+   "kind": "Hasj",
+   "price": 13,
+   "color": "#3d2a1a",
+   "unlock": "premiumShelf"
+  },
+  {
+   "id": "ice",
+   "name": "Ice-o-lator",
+   "kind": "Hasj",
+   "price": 16,
+   "color": "#c9a25f",
+   "unlock": "premiumShelf"
+  }
+ ],
+ "extras": [
+  {
+   "id": "preroll",
+   "name": "Pre-roll",
+   "price": 6,
+   "prop": "preroll"
+  },
+  {
+   "id": "spacecake",
+   "name": "Spacecake",
+   "price": 7,
+   "prop": "spacecake"
+  },
+  {
+   "id": "papers",
+   "name": "Vloei",
+   "price": 1.5,
+   "prop": "papers"
+  },
+  {
+   "id": "lighter",
+   "name": "Aansteker",
+   "price": 1.5,
+   "prop": "lighter"
+  }
+ ],
+ "kitchen": [
+  {
+   "id": "shake_banana",
+   "name": "Banana shake",
+   "price": 5.5,
+   "time": 7,
+   "station": "bar",
+   "prop": "shake",
+   "color": "#f3e08a"
+  },
+  {
+   "id": "shake_straw",
+   "name": "Aardbei shake",
+   "price": 5.5,
+   "time": 7,
+   "station": "bar",
+   "prop": "shake",
+   "color": "#f2a0b4"
+  },
+  {
+   "id": "shake_choc",
+   "name": "Choco shake",
+   "price": 5.5,
+   "time": 7,
+   "station": "bar",
+   "prop": "shake",
+   "color": "#8a5a3c"
+  },
+  {
+   "id": "shake_special",
+   "name": "Kronkel Special",
+   "price": 6.5,
+   "time": 9,
+   "station": "bar",
+   "prop": "shake",
+   "color": "#9fd36a",
+   "unlock": "milkshakeBar"
+  },
+  {
+   "id": "mint",
+   "name": "Verse muntthee",
+   "price": 3.5,
+   "time": 4,
+   "station": "bar",
+   "prop": "tea"
+  },
+  {
+   "id": "cappu",
+   "name": "Cappuccino",
+   "price": 3.2,
+   "time": 4,
+   "station": "bar",
+   "prop": "coffee"
+  },
+  {
+   "id": "cola",
+   "name": "Cola",
+   "price": 3.0,
+   "time": 2,
+   "station": "bar",
+   "prop": "cola"
+  },
+  {
+   "id": "pie",
+   "name": "Appeltaart",
+   "price": 4.5,
+   "time": 5,
+   "station": "bar",
+   "prop": "pie"
+  },
+  {
+   "id": "tosti",
+   "name": "Tosti ham-kaas",
+   "price": 5.0,
+   "time": 11,
+   "station": "kitchen",
+   "prop": "tosti"
+  },
+  {
+   "id": "fries",
+   "name": "Friet mayo",
+   "price": 4.5,
+   "time": 13,
+   "station": "kitchen",
+   "prop": "fries"
+  },
+  {
+   "id": "burger",
+   "name": "Kronkel Burger",
+   "price": 11.0,
+   "time": 18,
+   "station": "kitchen",
+   "prop": "burger",
+   "unlock": "proKitchen"
+  }
+ ],
+ "boardGames": [
+  "Schaakbord",
+  "Backgammon",
+  "Ganzenbord",
+  "Domino",
+  "Kaartspel",
+  "Stratego"
+ ],
+ "upgrades": [
+  {
+   "id": "gameShelf",
+   "name": "Board game wall",
+   "cost": 600,
+   "desc": "Free board games. Guests stay longer and leave happier.",
+   "rep": 0.15
+  },
+  {
+   "id": "plants",
+   "name": "Plants & pampas",
+   "cost": 700,
+   "desc": "Banana plants, pampas grass, a green plant wall and the Buddha. Small reputation boost.",
+   "rep": 0.15
+  },
+  {
+   "id": "neon",
+   "name": "Lit sign",
+   "cost": 900,
+   "desc": "Light up the tall KRONKEL sign in the alley. More walk-ins after dark.",
+   "traffic": 0.12
+  },
+  {
+   "id": "vaporizer",
+   "name": "Free vaporizer",
+   "cost": 1200,
+   "desc": "A vaporizer guests can use for free. Happier guests.",
+   "rep": 0.2
+  },
+  {
+   "id": "extraTables",
+   "name": "Window tables",
+   "cost": 1500,
+   "desc": "Two small tables with poufs by the front window.",
+   "seats": 4
+  },
+  {
+   "id": "pool",
+   "name": "Pool tables",
+   "cost": 2200,
+   "desc": "Two pool tables with blue felt. Groups stay longer and come back.",
+   "rep": 0.2,
+   "traffic": 0.05
+  },
+  {
+   "id": "lounge",
+   "name": "Fireplace lounge",
+   "cost": 2000,
+   "desc": "Reclaimed wood wall, gas fireplace and a cream leather sofa. Three cosy seats.",
+   "rep": 0.2,
+   "seats": 3
+  },
+  {
+   "id": "milkshakeBar",
+   "name": "Milkshake bar",
+   "cost": 1800,
+   "desc": "Homemade shakes, faster drinks, unlocks the Kronkel Special.",
+   "rep": 0.25
+  },
+  {
+   "id": "stage",
+   "name": "Acoustic corner",
+   "cost": 2500,
+   "desc": "A little corner for live sets. Book singer-songwriters in the evening.",
+   "traffic": 0.1,
+   "rep": 0.2
+  },
+  {
+   "id": "premiumShelf",
+   "name": "Premium shelf",
+   "cost": 3000,
+   "desc": "Unlocks Gorilla Glue, Wedding Cake, Charas and Ice-o-lator."
+  },
+  {
+   "id": "proKitchen",
+   "name": "Pro kitchen",
+   "cost": 3500,
+   "desc": "Faster cooking and the Kronkel Burger."
+  },
+  {
+   "id": "houseStrain",
+   "name": "House strain",
+   "cost": 5000,
+   "desc": "Kronkel Kush, only sold here. People travel for it.",
+   "requires": "premiumShelf",
+   "traffic": 0.15
+  },
+  {
+   "id": "terrace",
+   "name": "Rooftop terrace",
+   "cost": 6000,
+   "desc": "The famous dakterras: five tables in the open air.",
+   "seats": 16,
+   "rep": 0.3
+  }
+ ],
+ "staff": [
+  {
+   "id": "cashier",
+   "name": "Kassa",
+   "wage": 110,
+   "perHour": 26,
+   "max": 3,
+   "desc": "Sells at the counter. Each one serves about 26 customers an hour."
+  },
+  {
+   "id": "server",
+   "name": "Bediening",
+   "wage": 100,
+   "perHour": 14,
+   "max": 4,
+   "desc": "Serves tables. Each one looks after about 14 seated guests an hour."
+  },
+  {
+   "id": "cook",
+   "name": "Keuken",
+   "wage": 120,
+   "perHour": 20,
+   "max": 2,
+   "desc": "Needed for food. Each one makes about 20 dishes an hour."
+  }
+ ],
+ "names": {
+  "first": [
+   "Daan",
+   "Sem",
+   "Lotte",
+   "Noa",
+   "Bram",
+   "Femke",
+   "Jesse",
+   "Sanne",
+   "Thijs",
+   "Iris",
+   "Ruben",
+   "Lieke",
+   "Milan",
+   "Anouk",
+   "Joris",
+   "Eva",
+   "Kees",
+   "Mila",
+   "Stijn",
+   "Fleur",
+   "Youssef",
+   "Amira",
+   "Luca",
+   "Zoë",
+   "Tom",
+   "Emma",
+   "Finn",
+   "Julia",
+   "Max",
+   "Nina",
+   "Ahmed",
+   "Sophie",
+   "Hugo",
+   "Lina",
+   "Gijs",
+   "Roos"
+  ],
+  "last": [
+   "de Vries",
+   "Jansen",
+   "Bakker",
+   "Visser",
+   "Smit",
+   "Meijer",
+   "de Boer",
+   "Mulder",
+   "de Groot",
+   "Bos",
+   "Vos",
+   "Peters",
+   "Hendriks",
+   "van Dijk",
+   "Dekker",
+   "Brouwer",
+   "Koster",
+   "Willems",
+   "El Amrani",
+   "Schouten",
+   "Verhoeven",
+   "Kuipers",
+   "van Leeuwen",
+   "Postma"
+  ]
+ },
+ "lines": {
+  "greet": [
+   "Hoi!",
+   "Goedemiddag!",
+   "Hey hey.",
+   "Hallo!",
+   "Yo!",
+   "Goedenavond!",
+   "Hi there!"
+  ],
+  "thanks": [
+   "Dankjewel!",
+   "Top, bedankt!",
+   "Lekker, doei!",
+   "Thanks, fijne avond!",
+   "Tot de volgende keer!"
+  ],
+  "angry": [
+   "Dit duurt veel te lang...",
+   "Laat maar zitten.",
+   "Seriously?",
+   "Ik ga wel ergens anders heen."
+  ],
+  "alcohol": [
+   "...and a Heineken?",
+   "...and two beers?",
+   "...and a glass of wine?"
+  ]
+ },
+ "events": [
+  {
+   "id": "rain",
+   "title": "Regen in Nijmegen",
+   "text": "It's pouring. The terrace stays empty and fewer people go out.",
+   "traffic": -0.25,
+   "terraceClosed": true
+  },
+  {
+   "id": "sunny",
+   "title": "Zonnige dag",
+   "text": "Sun's out! Everyone wants a spot on a terrace.",
+   "traffic": 0.2,
+   "terraceBonus": true
+  },
+  {
+   "id": "nec",
+   "title": "NEC home match",
+   "text": "NEC plays at home tonight. Expect a rush after the match.",
+   "traffic": 0.3
+  },
+  {
+   "id": "students",
+   "title": "Exam week is over",
+   "text": "Radboud students are celebrating the end of exams.",
+   "traffic": 0.25
+  },
+  {
+   "id": "vierdaagse",
+   "title": "De Vierdaagse!",
+   "text": "The Four Days Marches. The whole city is a party. Huge crowds.",
+   "traffic": 0.8,
+   "week": true
+  },
+  {
+   "id": "inspection",
+   "title": "Handhaving",
+   "text": "Municipal inspectors are visiting today. Stay under 500 g of stock and check every ID.",
+   "inspection": true
+  },
+  {
+   "id": "fridge",
+   "title": "Fridge broke",
+   "text": "The milkshake fridge died. Repair costs money.",
+   "cost": 350
+  },
+  {
+   "id": "band",
+   "title": "A singer wants to play",
+   "text": "A local singer-songwriter asks to play tonight for €150. More visitors, better vibes.",
+   "needs": "stage",
+   "offer": 150,
+   "traffic": 0.25,
+   "rep": 0.1
+  }
+ ]
+}

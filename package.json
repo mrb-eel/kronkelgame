@@ -1,0 +1,17 @@
+{
+  "name": "kronkel-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fan-made coffeeshop game set in Kronkel, Nijmegen. Web game for desktop, mobile, controllers and VR.",
+  "type": "module",
+  "scripts": {
+    "start": "http-server -c-1 -p 8080 .",
+    "models": "python blender/build_all.py",
+    "compress": "node tools/compress-models.mjs",
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.5.1",
+    "http-server": "^14.1.1"
+  }
+}

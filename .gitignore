@@ -1,0 +1,7 @@
+node_modules/
+blender/out/*.glb
+blender/out/*.blend1
+__pycache__/
+*.pyc
+.DS_Store
+blender/out/textures/
