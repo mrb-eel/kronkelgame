@@ -18,6 +18,10 @@ browser, and the NL / EN / DE stickers on the title screen (or *Settings*) switc
 | --- | --- | --- |
 | ![Phone](docs/screenshots/game_phone_kassa.jpg) | ![Receipt](docs/screenshots/game_receipt.jpg) | ![Report](docs/screenshots/game_tycoon_report.jpg) |
 
+| Customers at the counter | Characters (Blender render) | Booths (Blender render) |
+| --- | --- | --- |
+| ![Customers](docs/screenshots/game_people.jpg) | ![People](docs/screenshots/blender_people.jpg) | ![Booths](docs/screenshots/blender_shop_booths.jpg) |
+
 | Settings and languages | The alley (Blender render) | Inside (Blender render) |
 | --- | --- | --- |
 | ![Settings](docs/screenshots/game_settings.jpg) | ![Alley](docs/screenshots/blender_alley.jpg) | ![Interior](docs/screenshots/blender_shop_interior.jpg) |

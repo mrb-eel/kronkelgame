@@ -118,8 +118,8 @@ export class BaseScreen {
     const y = (gui.h - h) / 2 + 10 * S;
     gui.card(x, y, w, h, { tone: 'ink' });
     gui.tiles(t('pause.title'), gui.w / 2, y - 24 * S, 46 * S, { align: 'center', tilt: -0.03 });
-    gui.text(t('pause.sub'), gui.w / 2, y + 58 * S, 15 * S, { color: C.dim, align: 'center',
-      weight: 600, max: w - 30 * S });
+    gui.text(t('pause.sub'), gui.w / 2, y + 60 * S, 22 * S, { font: 'label', color: C.yellow, align: 'center', upper: true,
+      max: w - 30 * S });
     const bw = w - 48 * S;
     const bh = 56 * S;
     let by = y + 86 * S;

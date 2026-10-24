@@ -22,7 +22,7 @@ export default {
 
   // --- pause / modal
   'pause.title': 'PAUSE',
-  'pause.sub': 'Take five. The shop will wait.',
+  'pause.sub': 'Smoke break.',
   'pause.resume': 'Keep playing',
   'pause.quit': 'Quit',
 
@@ -95,7 +95,7 @@ export default {
   'cash.strike': 'Strike {n}/3 · {text}',
   'cash.tipFloat': 'tip {amt}',
   'cash.next': 'Next customer coming up...',
-  'cash.quiet': 'Quiet moment. No one at the counter.',
+  'cash.quiet': 'Dead quiet. Nobody at the counter.',
   'cash.walking': 'The next customer is walking in',
   'cash.idPanel': 'ID check',
   'cash.idQ': '18+? Not expired? Is it them?',
@@ -268,7 +268,7 @@ export default {
   'rep.thanks': 'THANKS, SEE YOU TOMORROW',
   'rep.next': 'Next day',
   'bankrupt.title': 'Bankrupt!',
-  'bankrupt.text': 'The bank pulled the plug: your Kronkel ran out of money. Every coffeeshop legend has a rough start. Try again?',
+  'bankrupt.text': 'The bank pulled the plug. Your Kronkel is broke. Again?',
   'bankrupt.again': 'Try again',
   'ty.stockMax': 'Stock is at the legal maximum of 500 g.',
   'ty.noCash': 'Not enough cash.',

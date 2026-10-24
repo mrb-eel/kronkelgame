@@ -22,7 +22,7 @@ export default {
 
   // --- Pause
   'pause.title': 'PAUSE',
-  'pause.sub': 'Kurz chillen. Der Laden wartet.',
+  'pause.sub': 'Raucherpause.',
   'pause.resume': 'Weiterspielen',
   'pause.quit': 'Beenden',
 
@@ -268,7 +268,7 @@ export default {
   'rep.thanks': 'DANKE UND BIS MORGEN',
   'rep.next': 'Nächster Tag',
   'bankrupt.title': 'Pleite!',
-  'bankrupt.text': 'Die Bank zieht den Stecker: Deinem Kronkel ist das Geld ausgegangen. Jede Coffeeshop-Legende hatte einen holprigen Start. Nochmal versuchen?',
+  'bankrupt.text': 'Die Bank zieht den Stecker. Dein Kronkel ist pleite. Nochmal?',
   'bankrupt.again': 'Nochmal',
   'ty.stockMax': 'Der Vorrat ist am gesetzlichen Maximum von 500 g.',
   'ty.noCash': 'Nicht genug Geld.',

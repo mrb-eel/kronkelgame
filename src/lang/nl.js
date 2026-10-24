@@ -22,7 +22,7 @@ export default {
 
   // --- pauze
   'pause.title': 'PAUZE',
-  'pause.sub': 'Effe chillen. De shop wacht wel.',
+  'pause.sub': 'Rookpauze.',
   'pause.resume': 'Verder spelen',
   'pause.quit': 'Stoppen',
 
@@ -268,7 +268,7 @@ export default {
   'rep.thanks': 'BEDANKT EN TOT MORGEN',
   'rep.next': 'Volgende dag',
   'bankrupt.title': 'Failliet!',
-  'bankrupt.text': 'De bank trekt de stekker eruit: je Kronkel heeft geen geld meer. Elke coffeeshoplegende heeft een lastige start. Opnieuw proberen?',
+  'bankrupt.text': 'De bank trekt de stekker eruit. Je Kronkel is blut. Nog een keer?',
   'bankrupt.again': 'Opnieuw',
   'ty.stockMax': 'De voorraad zit op het wettelijke maximum van 500 g.',
   'ty.noCash': 'Niet genoeg geld.',
