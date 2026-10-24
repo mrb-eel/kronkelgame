@@ -72,6 +72,17 @@ or `python3 -m http.server 8080` in the repo root.
   on the floor in Bediening.
 - **Phone**: Share → *Add to Home Screen* to play fullscreen and offline.
 
+### Android app (APK)
+
+`dist/kronkel.apk` is the whole game in a fullscreen Android WebView: it plays offline, saves on the phone, and the
+Android back button works like Esc (back / pause). Download it on the phone, open it and allow installing from
+your browser or file manager when Android asks. Needs Android 7.0 or newer.
+
+Rebuild it after changing the game with `bash tools/build-apk.sh` (Java 17+, no Android SDK needed: the wrapper in
+`android/` compiles against small stubs, then apktool packs it and uber-apk-signer signs it with a debug key).
+
+On iPhone there's no APK: open the hosted game in Safari and use Share → *Add to Home Screen*.
+
 ### Put it online (GitHub Pages)
 
 `.github/workflows/pages.yml` runs the tests and publishes the game on every push to `main`. Enable it once in the
