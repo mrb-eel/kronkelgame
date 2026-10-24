@@ -1,6 +1,7 @@
 // Tycoon mode: run your own Kronkel. Plan the morning (stock, staff, prices, upgrades), watch the
 // day play out hour by hour, read the report, repeat. Pure logic; saved as plain JSON.
-import { clamp, rng as makeRng, round2 } from '../util.js';
+import { clamp, euro, rng as makeRng, round2 } from '../util.js';
+import { t as tr, td } from '../i18n.js';
 
 export const START_DATE = '2026-06-01'; // a Monday
 const HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
@@ -43,8 +44,6 @@ export function dateOf(state) {
 export function weekday(state) {
   return (state.day - 1) % 7; // 0 = Monday
 }
-
-export const DAY_NAMES = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 
 export class TycoonSim {
   constructor(data, layout, state) {
@@ -125,8 +124,8 @@ export class TycoonSim {
     const room = this.data.rules.maxStockGrams - this.stockTotal();
     const g = Math.max(0, Math.min(grams, room));
     const cost = round2(g * BUY_PRICE[kind]);
-    if (g <= 0) return { ok: false, reason: 'Stock is at the legal maximum of 500 g.' };
-    if (cost > s.cash) return { ok: false, reason: 'Not enough cash.' };
+    if (g <= 0) return { ok: false, reason: tr('ty.stockMax') };
+    if (cost > s.cash) return { ok: false, reason: tr('ty.noCash') };
     s.stock[kind] += g;
     s.cash = round2(s.cash - cost);
     return { ok: true, grams: g, cost };
@@ -142,9 +141,9 @@ export class TycoonSim {
     const u = this.data.upgrades.find((x) => x.id === id);
     if (!u || this.has(id)) return { ok: false };
     if (u.requires && !this.has(u.requires)) {
-      return { ok: false, reason: `Needs ${this.data.upgrades.find((x) => x.id === u.requires).name} first.` };
+      return { ok: false, reason: tr('ty.needs', { name: td('up', this.data.upgrades.find((x) => x.id === u.requires)) }) };
     }
-    if (this.s.cash < u.cost) return { ok: false, reason: 'Not enough cash.' };
+    if (this.s.cash < u.cost) return { ok: false, reason: tr('ty.noCash') };
     this.s.cash = round2(this.s.cash - u.cost);
     this.s.upgrades.push(id);
     return { ok: true };
@@ -222,7 +221,7 @@ export class TycoonSim {
     }
     if (soldOut && !R.soldOutWarned) {
       R.soldOutWarned = true;
-      this.emit('soldout', { text: `Sold out at ${h % 24}:00! Customers leave empty-handed.` });
+      this.emit('soldout', { text: tr('ty.soldOut', { h: h % 24 }) });
     }
     served = soldCount;
     // seated guests
@@ -263,19 +262,19 @@ export class TycoonSim {
     R.hourly.push(hour);
     if (lost > 3 && !R.queueWarned) {
       R.queueWarned = true;
-      this.emit('queue', { text: `The queue is out the door at ${h % 24}:00. Another cashier would help.` });
+      this.emit('queue', { text: tr('ty.queueOut', { h: h % 24 }) });
     }
     // inspection
     if (s.event?.inspection && R.hourIdx === 6) {
       if (this.stockTotal() > this.data.rules.maxStockGrams) {
         R.fines += 5000;
-        this.emit('fine', { text: 'Inspectors found more than 500 g in stock! €5.000 fine.' });
+        this.emit('fine', { text: tr('ty.fineStock', { amt: euro(5000, 0) }) });
       } else if (s.policy.id === 'quick' && r.chance(0.5)) {
         R.fines += 2500;
         s.rep = clamp(s.rep - 0.4, 0, 5);
-        this.emit('fine', { text: 'An inspector caught a sale to someone under 18. €2.500 fine.' });
+        this.emit('fine', { text: tr('ty.fineMinor', { amt: euro(2500, 0) }) });
       } else {
-        this.emit('ok', { text: 'The inspection went fine. Everything by the book.' });
+        this.emit('ok', { text: tr('ty.inspectionOk') });
       }
     }
     R.hourIdx++;
@@ -325,7 +324,7 @@ export class TycoonSim {
       soldOut: R.soldOut, seated: R.seated, revCannabis: round2(R.revCannabis), revFood: round2(R.revFood), revenue,
       wages, rent: RENT, foodCost: round2(foodCost), restock: round2(R.restockCost), fines: R.fines, profit,
       satisfaction: round2(sat), repBefore: round2(repBefore), repAfter: round2(s.rep), grams: R.grams, hourly: R.hourly,
-      event: s.event?.title || null, weather: s.weather,
+      event: s.event?.id || null, weather: s.weather,
     };
     s.lastReport = report;
     s.history.push({ day: s.day, revenue, profit, rep: round2(s.rep), visitors: R.visitors });
@@ -342,19 +341,19 @@ export class TycoonSim {
 
   _goals(rep) {
     const g = this.s.goals;
-    const hit = (id, text) => {
+    const hit = (id) => {
       if (!g[id]) {
         g[id] = this.s.day;
-        this.emit('goal', { text });
+        this.emit('goal', { id });
       }
     };
-    if (rep.revenue >= 1000) hit('rev1000', 'Goal: a €1.000 day!');
-    if (rep.revenue >= 2500) hit('rev2500', 'Goal: a €2.500 day!');
-    if (this.s.rep >= 4) hit('rep4', 'Goal: 4 star reputation!');
-    if (this.s.rep >= 4.8) hit('rep5', 'Goal: legendary 5 star Kronkel!');
-    if (this.has('terrace')) hit('terrace', 'Goal: the rooftop terrace is open!');
-    if (this.s.event?.id === 'vierdaagse' && rep.lost < rep.visitors * 0.15) hit('vierdaagse', 'Goal: survived the Vierdaagse!');
-    if (this.data.upgrades.every((u) => this.has(u.id))) hit('full', 'Goal: the full Kronkel, every upgrade!');
+    if (rep.revenue >= 1000) hit('rev1000');
+    if (rep.revenue >= 2500) hit('rev2500');
+    if (this.s.rep >= 4) hit('rep4');
+    if (this.s.rep >= 4.8) hit('rep5');
+    if (this.has('terrace')) hit('terrace');
+    if (this.s.event?.id === 'vierdaagse' && rep.lost < rep.visitors * 0.15) hit('vierdaagse');
+    if (this.data.upgrades.every((u) => this.has(u.id))) hit('full');
   }
 
   nextDay() {
@@ -370,12 +369,9 @@ export class TycoonSim {
 }
 
 export const TYCOON_HOURS = HOURS;
-export const GOAL_LIST = [
-  ['rev1000', 'Make €1.000 in one day'],
-  ['rep4', 'Reach 4 stars'],
-  ['terrace', 'Open the rooftop terrace'],
-  ['rev2500', 'Make €2.500 in one day'],
-  ['vierdaagse', 'Survive the Vierdaagse (July)'],
-  ['rep5', 'Become legendary (5 stars)'],
-  ['full', 'Build the full Kronkel'],
-];
+/** Goals in the order the overview lists them; the text comes from the goal.<id> translation. */
+export const GOAL_LIST = ['rev1000', 'rep4', 'terrace', 'rev2500', 'vierdaagse', 'rep5', 'full'];
+
+export function goalText(id) {
+  return tr(`goal.${id}`, { amt: euro(id === 'rev2500' ? 2500 : 1000, 0) });
+}

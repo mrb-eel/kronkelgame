@@ -5,7 +5,7 @@
   <title>Kronkel: The Coffeeshop Game</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="description" content="A fan-made game set in Coffeeshop Kronkel on Vlaamsegas, Nijmegen. Work the counter, serve the tables, or run the whole place. Plays on desktop, phone, controller and VR. 18+.">
-  <meta name="theme-color" content="#0c1a12">
+  <meta name="theme-color" content="#121015">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,26 +13,36 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="preload" href="assets/fonts/Inter-Bold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/ArchivoBlack.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/BarlowCondensed-800.woff2" as="font" type="font/woff2" crossorigin>
   <style>
-    @font-face { font-family: 'Inter'; src: url('assets/fonts/Inter-Regular.woff2') format('woff2'); font-weight: 400 500; font-display: swap; }
-    @font-face { font-family: 'Inter'; src: url('assets/fonts/Inter-Bold.woff2') format('woff2'); font-weight: 600 700; font-display: swap; }
-    @font-face { font-family: 'Inter'; src: url('assets/fonts/Inter-ExtraBold.woff2') format('woff2'); font-weight: 800 900; font-display: swap; }
-    @font-face { font-family: 'Kronkel Serif'; src: url('assets/fonts/DejaVuSerif-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
-    html, body { margin: 0; height: 100%; background: #0c1a12; overflow: hidden; overscroll-behavior: none; }
-    body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; font-family: Inter, system-ui, sans-serif; }
+    @font-face { font-family: 'Archivo Black'; src: url('assets/fonts/ArchivoBlack.woff2') format('woff2'); font-display: swap; }
+    @font-face { font-family: 'Barlow Condensed'; src: url('assets/fonts/BarlowCondensed-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+    @font-face { font-family: 'Barlow Condensed'; src: url('assets/fonts/BarlowCondensed-800.woff2') format('woff2'); font-weight: 800 900; font-display: swap; }
+    @font-face { font-family: 'Barlow'; src: url('assets/fonts/Barlow-500.woff2') format('woff2'); font-weight: 400 600; font-display: swap; }
+    @font-face { font-family: 'Barlow'; src: url('assets/fonts/Barlow-700.woff2') format('woff2'); font-weight: 700 900; font-display: swap; }
+    :root { --ink: #121015; --paper: #f5efe1; --yellow: #ffc814; --red: #d51f2b; --red-deep: #8f1019; --purple: #9a45ff; }
+    html, body { margin: 0; height: 100%; background: var(--ink); overflow: hidden; overscroll-behavior: none; }
+    body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; font-family: Barlow, system-ui, sans-serif; }
     canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; }
     #ui { touch-action: none; outline: none; }
-    #boot { position: fixed; inset: 0; display: grid; place-items: center; color: #f6efd9; background: radial-gradient(circle at 50% 40%, #1d3a28, #0c1a12 70%); transition: opacity .6s; z-index: 5; }
+    #boot { position: fixed; inset: 0; display: grid; place-items: center; z-index: 5; transition: opacity .6s;
+      background: radial-gradient(circle at 50% 30%, rgba(154,69,255,.35), transparent 60%),
+                  radial-gradient(rgba(154,69,255,.18) 1.2px, transparent 1.4px) 0 0 / 9px 9px, var(--ink); }
     #boot.hide { opacity: 0; pointer-events: none; }
-    #boot .face { display: block; margin: 0 auto 6px; width: clamp(80px, 18vw, 130px); height: auto; animation: bob 2.4s ease-in-out infinite; }
-    @keyframes bob { 50% { transform: translateY(-6px) rotate(-3deg); } }
-    #boot > div { text-align: center; }
-    #boot .logo { font-family: 'Kronkel Serif', Georgia, serif; font-size: clamp(42px, 9vw, 96px); color: #ffcf5a; letter-spacing: .04em; text-shadow: 0 6px 30px rgba(0,0,0,.6); }
-    #boot .sub { opacity: .7; margin-top: 6px; text-align: center; font-weight: 600; letter-spacing: .14em; font-size: 12px; text-transform: uppercase; }
-    #boot .bar { width: min(320px, 70vw); height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin: 26px auto 0; overflow: hidden; }
-    #boot .bar i { display: block; height: 100%; width: 0; background: #9fe07a; transition: width .2s; }
-    #boot .err { color: #ff8a8a; max-width: 420px; text-align: center; margin-top: 16px; font-size: 14px; line-height: 1.4; }
+    #boot .wrap { text-align: center; padding: 24px; }
+    #boot .face { display: block; margin: 0 auto 14px; width: clamp(96px, 22vw, 150px); height: auto;
+      filter: drop-shadow(5px 5px 0 var(--ink)); animation: bob 1.6s ease-in-out infinite; }
+    @keyframes bob { 50% { transform: translateY(-8px) rotate(-6deg); } }
+    #boot .tiles { display: flex; gap: clamp(4px, 1vw, 8px); justify-content: center; }
+    #boot .tiles span { --s: clamp(34px, 9vw, 64px); width: var(--s); height: var(--s); display: grid; place-items: center;
+      font: 400 calc(var(--s) * .72)/1 'Archivo Black', Impact, sans-serif; color: #5a5249; background: #8a8174;
+      border: calc(var(--s) * .07) solid var(--red-deep); border-radius: calc(var(--s) * .1); box-shadow: 5px 5px 0 #000;
+      transition: background .25s, color .25s, box-shadow .25s; }
+    #boot .tiles span.on { background: var(--paper); color: var(--red); box-shadow: 5px 5px 0 #000, 0 0 22px rgba(255,243,192,.55); }
+    #boot .strip { display: inline-block; margin-top: 16px; padding: 6px 14px; background: #000; color: var(--paper);
+      font: 800 clamp(12px, 2.6vw, 16px)/1.2 'Barlow Condensed', sans-serif; letter-spacing: .22em; transform: rotate(-1.5deg); }
+    #boot .err { color: #ff8a8a; max-width: 420px; margin: 18px auto 0; font-size: 15px; line-height: 1.4; }
     noscript { color: #fff; position: fixed; inset: 0; display: grid; place-items: center; }
   </style>
   <script type="importmap">
@@ -48,11 +58,10 @@
   <canvas id="gl"></canvas>
   <canvas id="ui" tabindex="0" aria-label="Kronkel game"></canvas>
   <div id="boot">
-    <div>
-      <img class="face" src="assets/images/kronkel-logo.png" alt="" width="120" height="120">
-      <div class="logo">KRONKEL</div>
-      <div class="sub">Coffeeshop · Vlaamsegas · Nijmegen</div>
-      <div class="bar"><i id="bootbar"></i></div>
+    <div class="wrap">
+      <img class="face" src="assets/images/kronkel-logo.png" alt="" width="150" height="150">
+      <div class="tiles" id="boottiles"><span>K</span><span>R</span><span>O</span><span>N</span><span>K</span><span>E</span><span>L</span></div>
+      <div class="strip">COFFEESHOP · NIJMEGEN · SINDS 1986</div>
       <div class="err" id="booterr"></div>
     </div>
   </div>

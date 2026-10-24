@@ -1,12 +1,12 @@
 // Offline support: cache the game shell and assets on first visit, serve from cache afterwards,
 // refresh in the background so updates arrive on the next launch.
-const CACHE = 'kronkel-v1';
+const CACHE = 'kronkel-v3';
 const CORE = [
   './', './index.html', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
   './assets/layout.json', './assets/images/kronkel-logo.png', './assets/gamedata.json',
   './assets/models/shop.glb', './assets/models/people.glb', './assets/models/props.glb',
-  './assets/fonts/Inter-Regular.woff2', './assets/fonts/Inter-Bold.woff2', './assets/fonts/Inter-ExtraBold.woff2',
-  './assets/fonts/DejaVuSerif-Bold.ttf',
+  './assets/fonts/ArchivoBlack.woff2', './assets/fonts/BarlowCondensed-700.woff2', './assets/fonts/BarlowCondensed-800.woff2',
+  './assets/fonts/Barlow-500.woff2', './assets/fonts/Barlow-700.woff2',
   './vendor/three/three.module.min.js', './vendor/three/three.core.min.js',
   './vendor/three/addons/loaders/GLTFLoader.js', './vendor/three/addons/utils/BufferGeometryUtils.js',
   './vendor/three/addons/utils/SkeletonUtils.js', './vendor/three/addons/libs/meshopt_decoder.module.js',

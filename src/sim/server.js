@@ -2,6 +2,7 @@
 // pass, bring board games, settle the bill, clean up. Pure logic; the screen renders it.
 import { clamp, randomLook, rng as makeRng, round2, staffLook } from '../util.js';
 import { Nav, stepAlong } from './nav.js';
+import { t as tr, tl, td } from '../i18n.js';
 
 const WAITER_SPEED = 3.0;
 const GUEST_SPEED = 1.35;
@@ -20,7 +21,7 @@ export class ServerSim {
     this.nav = new Nav(layout, { upgrades: this.upgrades, tables: this._tablesAvail() });
     this.tables = this._tablesAvail().map((t) => ({ ...t, state: 'free', group: null, props: [] }));
     this.terraceOpen = false;
-    this.menu = data.kitchen.filter((k) => !k.unlock || this.upgrades.has(k.unlock));
+    this.menu = data.kitchen.filter((k) => !k.unlock || this.upgrades.has(k.unlock)).map((k) => ({ ...k, name: td('item', k) }));
     this.groups = [];
     this.tickets = [];
     this.ready = []; // items waiting on the pass
@@ -92,7 +93,7 @@ export class ServerSim {
   /** Tap on the host area: select the longest-waiting group. */
   selectHost() {
     const g = this.waiting.find((x) => x.state === 'waiting') || this.waiting[0];
-    if (!g) return { ok: false, reason: 'Nobody is waiting at the door.' };
+    if (!g) return { ok: false, reason: tr('srv.noGroup') };
     this.selectedGroup = g.id;
     this.emit('select', { group: g.id });
     return { ok: true, group: g };
@@ -102,12 +103,12 @@ export class ServerSim {
   tapTable(id) {
     const t = this.table(id);
     if (!t) return { ok: false };
-    if (t.level === 1 && !this.terraceOpen) return { ok: false, reason: 'The terrace opens at 14:00.' };
+    if (t.level === 1 && !this.terraceOpen) return { ok: false, reason: tr('srv.terraceLater') };
     if (this.selectedGroup) {
       const g = this.groups.find((x) => x.id === this.selectedGroup);
       if (g && (g.state === 'waiting' || g.state === 'arriving')) {
-        if (t.state !== 'free') return { ok: false, reason: 'That table is taken.' };
-        if (t.seats.length < g.size) return { ok: false, reason: `That table only seats ${t.seats.length}.` };
+        if (t.state !== 'free') return { ok: false, reason: tr('srv.taken') };
+        if (t.seats.length < g.size) return { ok: false, reason: tr('srv.tooSmall', { n: t.seats.length }) };
         this._seat(g, t);
         this.selectedGroup = null;
         return { ok: true, seated: true };
@@ -123,15 +124,15 @@ export class ServerSim {
       else if (g.wantsGame && !g.hadGame) type = 'game';
       else if (g.state === 'waitFood' || g.state === 'eating') {
         if (this.waiter.carry.some((c) => c.table === t.id) || this._queued('pickup')) type = 'serve';
-        else return { ok: false, reason: 'Their order is not ready yet. Pick it up at the pass first.' };
+        else return { ok: false, reason: tr('srv.notReady') };
       }
     }
-    if (!type) return { ok: false, reason: t.state === 'free' ? 'Tap the door first to pick a group to seat.' : 'Nothing to do there yet.' };
+    if (!type) return { ok: false, reason: t.state === 'free' ? tr('srv.doorFirst') : tr('srv.nothing') };
     return this._enqueue({ type, table: t.id });
   }
 
   tapPass() {
-    if (!this.ready.length && !this.tickets.length) return { ok: false, reason: 'Nothing on the pass.' };
+    if (!this.ready.length && !this.tickets.length) return { ok: false, reason: tr('srv.passEmpty') };
     return this._enqueue({ type: 'pickup' });
   }
 
@@ -145,8 +146,8 @@ export class ServerSim {
   }
 
   _enqueue(a) {
-    if (this._queued(a.type, a.table)) return { ok: false, reason: 'Already on your list.' };
-    if (this.waiter.queue.length >= 6) return { ok: false, reason: 'Your to-do list is full.' };
+    if (this._queued(a.type, a.table)) return { ok: false, reason: tr('srv.queued') };
+    if (this.waiter.queue.length >= 6) return { ok: false, reason: tr('srv.listFull') };
     this.waiter.queue.push({ ...a, id: ++this.uid });
     this.emit('queued', { action: a.type, table: a.table });
     return { ok: true };
@@ -267,7 +268,7 @@ export class ServerSim {
 
   _walkout(g, t) {
     this.stats.walkouts++;
-    this.emit('walkout', { text: g.table ? `Table ${g.table} walked out!` : 'A group got tired of waiting at the door.' });
+    this.emit('walkout', { text: g.table ? tr('srv.tableLeft', { t: g.table }) : tr('srv.doorLeft') });
     if (t) {
       t.state = g.order.some((o) => o.served) ? 'dirty' : 'free';
       t.group = null;
@@ -394,14 +395,14 @@ export class ServerSim {
         const take = this.ready.splice(0, Math.max(0, space));
         w.carry.push(...take);
         if (take.length) this.emit('pickup', { n: take.length });
-        else this.emit('info', { text: 'Nothing ready yet on the pass.' });
+        else this.emit('info', { text: tr('srv.nothingReady') });
         break;
       }
       case 'serve': {
         if (!g) break;
         const mine = w.carry.filter((c) => c.table === t.id);
         if (!mine.length) {
-          this.emit('info', { text: `You have nothing for ${t.id}.` });
+          this.emit('info', { text: tr('srv.nothingFor', { t: t.id }) });
           break;
         }
         w.carry = w.carry.filter((c) => c.table !== t.id);
@@ -422,7 +423,7 @@ export class ServerSim {
       case 'fetchGame':
         if (!w.game) {
           w.game = true;
-          this.emit('info', { text: 'Grabbed a board game.' });
+          this.emit('info', { text: tr('srv.grabbedGame') });
         }
         break;
       case 'game':
@@ -432,7 +433,7 @@ export class ServerSim {
           g.mood = Math.min(1, g.mood + 0.3);
           g.eatT += 6;
           this.stats.gamesBrought++;
-          g.gameName = this.rng.pick(this.data.boardGames);
+          g.gameName = this.rng.pick(tl('games'));
           this.emit('game', { table: t.id, name: g.gameName });
         }
         break;
@@ -477,7 +478,7 @@ export class ServerSim {
         if (this.waiting.length < 4) this._spawnGroup();
         else {
           this.stats.missed++;
-          this.emit('info', { text: 'A group saw the queue at the door and left.' });
+          this.emit('info', { text: tr('srv.sawQueue') });
         }
         const secPerHour = 1 / this.rate;
         this.spawnIn = (secPerHour / this._rateFor(this.hour)) * this.rng.range(0.65, 1.35);
@@ -500,7 +501,7 @@ export class ServerSim {
 
   score() {
     const s = this.stats;
-    return Math.round(s.revenue + s.tips * 2 + s.gamesBrought * 5 - s.walkouts * 15 - s.missed * 3);
+    return Math.max(0, Math.round(s.revenue + s.tips * 2 + s.gamesBrought * 5 - s.walkouts * 15 - s.missed * 3));
   }
 
   starsFor(score) {

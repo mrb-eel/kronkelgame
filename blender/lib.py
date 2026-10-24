@@ -373,7 +373,8 @@ def tube(name, points, r, material, segs=6, parent=None):
 
 
 _FONTS = {}
-FONT_FILES = {"sans": "Inter-ExtraBold.otf", "bold": "Inter-Bold.otf", "serif": "DejaVuSerif-Bold.ttf"}
+# Same type as the game UI: Archivo Black for sign lettering, Barlow Condensed for menus and small print.
+FONT_FILES = {"sans": "ArchivoBlack.ttf", "bold": "BarlowCondensed-800.ttf", "serif": "ArchivoBlack.ttf"}
 
 
 def font(kind="sans"):

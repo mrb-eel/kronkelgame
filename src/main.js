@@ -5,6 +5,7 @@ import { XR } from './xr.js';
 import { loadSave, writeSave } from './save.js';
 import * as audio from './audio.js';
 import { clamp } from './util.js';
+import { setLang, detectLang, t } from './i18n.js';
 import { AgeScreen, TitleScreen } from './screens/title.js';
 import { HowtoScreen, SettingsScreen, CreditsScreen } from './screens/menus.js';
 import { CashierScreen } from './screens/cashier.js';
@@ -45,11 +46,13 @@ class Game {
     this.logo = new Image();
     this.logo.src = 'assets/images/kronkel-logo.png';
     this.save = loadSave();
+    setLang(this.save.settings.lang || detectLang(navigator.languages || [navigator.language]));
     audio.setVolumes(this.save.settings);
     const urlQ = new URLSearchParams(location.search).get('q');
     const q = urlQ || (this.save.settings.quality === 'auto' ? detectQuality() : this.save.settings.quality);
     this.world = new World(this.gl, layout, q);
     this.gui = new Gui(this.ui);
+    this.gui.logo = this.logo;
     this.input = new Input(this, this.ui);
     this.gui.onClickSound = () => audio.sfx.click();
     this.gui.project = (p) => this.world.project(p);
@@ -59,14 +62,14 @@ class Game {
     window.visualViewport?.addEventListener('resize', () => this.resize());
     this.resize();
     try {
-      await Promise.all(['800 16px Inter', '700 16px Inter', '500 16px Inter', '700 16px "Kronkel Serif"']
-        .map((f) => document.fonts.load(f)));
+      await Promise.all(['16px "Archivo Black"', '800 16px "Barlow Condensed"', '700 16px "Barlow Condensed"',
+        '500 16px Barlow', '700 16px Barlow'].map((f) => document.fonts.load(f)));
     } catch {
       /* system font fallback */
     }
-    const bar = document.getElementById('bootbar');
+    const tiles = [...document.querySelectorAll('#boottiles span')];
     await this.world.load((p) => {
-      bar.style.width = `${Math.round(p * 100)}%`;
+      tiles.forEach((t, i) => t.classList.toggle('on', i < Math.ceil(p * tiles.length)));
     });
     this.xr = new XR(this);
     this.xrSupported = await this.xr.supported();
@@ -86,6 +89,12 @@ class Game {
     this.world.resize(w, h, dpr);
     this.gui.resize(w, h, dpr);
     this.gui.safe = readSafeArea();
+  }
+
+  /** Switch language for the whole game and remember it. */
+  setLang(id) {
+    this.save.settings.lang = setLang(id);
+    this.persist();
   }
 
   setScreen(name, params = {}) {
@@ -157,5 +166,5 @@ window.kronkel = game; // handy for debugging and automated tests
 game.boot().catch((err) => {
   console.error(err);
   const el = document.getElementById('booterr');
-  if (el) el.textContent = `Could not start the game: ${err.message}. Try a recent Chrome, Safari, Firefox or Quest browser.`;
+  if (el) el.textContent = t('boot.error', { msg: err.message });
 });

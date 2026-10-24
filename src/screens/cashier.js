@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import { C } from '../gui.js';
-import { BaseScreen, topBar, panel, portrait } from './common.js';
+import { BaseScreen, hud, portrait, receipt, dashes, RECEIPT } from './common.js';
 import { CashierSim, CHANGE_UNITS } from '../sim/cashier.js';
 import { Crowd } from '../sim/crowd.js';
-import { clockText, dateText, euro, rng } from '../util.js';
+import { clamp, clockText, dateText, euro, rng } from '../util.js';
 import { sfx } from '../audio.js';
+import { t } from '../i18n.js';
 
-const TABS = [['weed', 'Wiet'], ['hash', 'Hasj'], ['extra', 'Extra']];
+const TABS = ['weed', 'hash', 'extra'];
+// Euro note colours, so counting change feels like the real drawer
+const NOTE = { 5: '#9aa59a', 10: '#d8655a', 20: '#5f8fd0', 50: '#f0a24a', 100: '#5fae6e' };
 
 export class CashierScreen extends BaseScreen {
   enter() {
@@ -25,6 +28,8 @@ export class CashierScreen extends BaseScreen {
     this.tab = 'weed';
     this.flash = 0;
     this.lastCall = false;
+    this.stampT = 9;
+    this.v3 = new THREE.Vector3();
     if (!g.save.seenHowto.kassa) {
       g.save.seenHowto.kassa = true;
       g.persist();
@@ -43,32 +48,42 @@ export class CashierScreen extends BaseScreen {
 
   onTab(d) {
     if (this.overlay) return this.overlay.onTab(d);
-    const i = TABS.findIndex((t) => t[0] === this.tab);
-    this.tab = TABS[(i + d + TABS.length) % TABS.length][0];
+    const i = TABS.indexOf(this.tab);
+    this.tab = TABS[(i + d + TABS.length) % TABS.length];
   }
 
   onAlt(btn) {
     const c = this.sim.current;
     if (!c || this.paused) return;
     if (btn === 'x') {
-      if (c.step === 'id') this.sim.checkId(true);
+      if (c.step === 'id') this._decide(true);
       else if (c.step === 'order') this._checkout();
       else if (c.step === 'pay' && c.pay === 'pin') this.sim.payPin();
       else if (c.step === 'pay') this.sim.giveChange();
     } else if (btn === 'y') {
-      if (c.step === 'id') this.sim.checkId(false);
+      if (c.step === 'id') this._decide(false);
       else if (c.step === 'order') this.sim.clearBag();
       else if (c.step === 'pay') this.sim.resetChange();
     }
   }
 
+  _decide(ok) {
+    const c = this.sim.current;
+    if (!c || c.step !== 'id') return;
+    this.stamped = { c, ok, valid: this.sim.isValidId(c) };
+    this.stampT = 0;
+    this.sim.checkId(ok);
+  }
+
   _checkout() {
     const r = this.sim.checkout();
-    if (!r.ok && r.reason === 'empty') this.toast('The bag is empty.', C.gold);
+    if (!r.ok && r.reason === 'empty') this.toast(t('cash.empty'), C.paper);
   }
 
   update(dt) {
     const sim = this.sim;
+    this.mascot.update(dt);
+    this.stampT += dt;
     if (!this.paused && !this.modal) {
       sim.update(dt);
       this.crowd.update(dt);
@@ -77,7 +92,7 @@ export class CashierScreen extends BaseScreen {
     for (const e of sim.events.splice(0)) this._event(e);
     if (!this.lastCall && sim.hour >= sim.closeHour) {
       this.lastCall = true;
-      this.toast('01:00, last call! Serve the queue and close up.', C.gold);
+      this.toast(t('cash.lastCall'), C.yellow);
     }
     this.world.setHour(sim.hour);
     const ents = sim.customers.map((c) => ({ id: `c${c.id}`, look: c.look, x: c.x, z: c.z, level: 0, yaw: c.yaw,
@@ -123,23 +138,24 @@ export class CashierScreen extends BaseScreen {
         break;
       case 'ok':
         sfx.ok();
-        if (e.text) this.toast(e.text, C.accent);
+        if (e.text) this.toast(e.text, C.yellow);
+        else this.mascot.react('good');
         break;
       case 'refusedOk':
         sfx.ok();
-        this.toast(e.text, C.accent);
+        this.toast(e.text, C.yellow);
         break;
       case 'strike':
         sfx.error();
         input.rumble(0.9, 0.6, 350);
         this.flash = 1;
-        this.toast(`Strike ${this.sim.stats.strikes}/3: ${e.text}`, C.red);
+        this.toast(t('cash.strike', { n: this.sim.stats.strikes, text: e.text }), C.red);
         break;
       case 'wrongRefusal':
       case 'mistake':
         sfx.error();
         input.rumble(0.4, 0.3, 150);
-        this.toast(e.text, C.gold);
+        this.toast(e.text, C.red);
         break;
       case 'walkout':
         sfx.sad();
@@ -147,11 +163,10 @@ export class CashierScreen extends BaseScreen {
         break;
       case 'sale': {
         sfx.cash();
-        const c = this.sim.customers.find((x) => x.phase === 'leave');
+        this.mascot.react('good');
         const pos = new THREE.Vector3(3.8, 1.9, -2.8);
-        this.game.gui.floatWorld(`+${euro(e.total)}`, pos, C.accent);
-        if (e.tip > 0) this.game.gui.floatWorld(`fooi ${euro(e.tip)}`, pos.clone().add(new THREE.Vector3(0.4, -0.25, 0)), C.gold);
-        void c;
+        this.game.gui.floatWorld(`+${euro(e.total)}`, pos, C.yellow);
+        if (e.tip > 0) this.game.gui.floatWorld(t('cash.tipFloat', { amt: euro(e.tip) }), pos.clone().add(new THREE.Vector3(0.45, -0.3, 0)), C.paper);
         break;
       }
       case 'pin':
@@ -171,23 +186,22 @@ export class CashierScreen extends BaseScreen {
     const g = this.game;
     const s = this.sim.stats;
     const score = this.sim.score();
-    const stars = this.sim.reason === 'closed' ? Math.min(1, this.sim.starsFor(score)) : this.sim.starsFor(score);
+    const closed = this.sim.reason === 'closed';
+    const stars = closed ? Math.min(1, this.sim.starsFor(score)) : this.sim.starsFor(score);
     const best = g.save.best.cashier;
     const newBest = score > best;
     if (newBest) g.save.best.cashier = score;
     g.save.stars.cashier = Math.max(g.save.stars.cashier, stars);
     g.persist();
-    const closed = this.sim.reason === 'closed';
     g.setScreen('results', {
       mode: 'cashier', closed,
-      title: closed ? 'Handhaving closed the shop!' : 'Shift over!',
-      subtitle: closed ? 'Three strikes. Always check IDs and stick to 5 gram.' : 'Kassa · 10:00 to 01:00',
-      score, stars, best: newBest ? score : best, newBest,
-      vrAnchor: this.vrAnchor(),
+      title: t(closed ? 'res.closed' : 'res.receipt'),
+      subtitle: t(closed ? 'res.closedSub' : 'res.cashierSub'),
+      score, stars, best: newBest ? score : best, newBest, vrAnchor: this.vrAnchor(),
       lines: [
-        ['Customers served', s.served], ['Revenue', euro(s.revenue)], ['Tips', euro(s.tips), C.gold],
-        ['Good refusals', s.refusedOk, C.accent], ['Wrong refusals', s.wrongRefusals, s.wrongRefusals ? C.red : null],
-        ['Walk-outs', s.walkouts, s.walkouts ? C.red : null], ['Strikes', `${s.strikes}/3`, s.strikes ? C.red : null],
+        [t('res.served'), s.served], [t('res.revenue'), euro(s.revenue)], [t('res.tips'), euro(s.tips)],
+        [t('res.refusedOk'), s.refusedOk], [t('res.wrongRefusals'), s.wrongRefusals],
+        [t('res.walkouts'), s.walkouts], [t('res.strikes'), `${s.strikes}/3`],
       ],
     });
   }
@@ -197,219 +211,369 @@ export class CashierScreen extends BaseScreen {
     const S = gui.S;
     const sim = this.sim;
     const c = sim.current;
-    if (this.flash > 0) gui.box(0, 0, gui.w, gui.h, { r: 0, fill: `rgba(255,60,60,${this.flash * 0.25})`, stroke: null });
+    if (this.flash > 0) {
+      gui.ctx.fillStyle = `rgba(213,31,43,${this.flash * 0.28})`;
+      gui.ctx.fillRect(0, 0, gui.w, gui.h);
+    }
     const strikes = sim.stats.strikes;
-    const barBottom = topBar(gui, [
-      { label: 'TIJD', value: clockText(sim.hour), color: sim.hour >= 24 ? C.gold : C.text },
-      { label: 'OMZET', value: euro(sim.stats.revenue, 0), color: C.accent },
-      { label: 'FOOI', value: euro(sim.stats.tips, 0), color: C.gold },
-      { label: 'STRIKES', value: '●'.repeat(strikes) + '○'.repeat(3 - strikes), color: strikes ? C.red : C.dim, w: 86 },
-      { label: 'RIJ', value: Math.max(0, sim.queue.length - (c ? 1 : 0)), w: 60 },
-    ], { right: { w: 52 * S, label: '', icon: 'pause', onClick: () => this.onPause() } });
-    const portraitMode = gui.portrait;
-    const pad = 10 * S;
+    const barBottom = hud(gui, this, [
+      { label: t('hud.time'), value: clockText(sim.hour), color: sim.hour >= 24 ? C.red : C.ink },
+      { label: t('hud.revenue'), value: euro(sim.stats.revenue, 0) },
+      { label: t('hud.tips'), value: euro(sim.stats.tips, 0) },
+      { label: t('hud.strikes'), w: 98, draw: (x, y, w) => this._strikes(gui, x, y, w, strikes) },
+      { label: t('hud.queue'), value: Math.max(0, sim.queue.length - (c ? 1 : 0)), w: 58 },
+    ], { onPause: () => this.onPause() });
+    const pad = 12 * S;
     const left = gui.safe.left + pad;
     const right = gui.w - gui.safe.right - pad;
     const bottom = gui.h - gui.safe.bottom - pad;
-    // Speech bubble
-    if (c && c.said) {
-      const bw = Math.min(portraitMode ? gui.w - 2 * pad : 520 * S, gui.w - 2 * pad);
-      const lines = gui.wrap(`${c.first}: ${c.said}`, bw - 32 * S, 15 * S, 600);
-      const bh = lines.length * 21 * S + 34 * S;
-      const bx = portraitMode ? left : gui.w / 2 - bw / 2;
-      const by = barBottom + 8 * S;
-      gui.box(bx, by, bw, bh, { r: 16, fill: C.panelLight, stroke: null, shadow: true });
-      lines.forEach((l, i) => gui.text(l, bx + 16 * S, by + 26 * S + i * 21 * S, 15 * S, { color: C.dark, weight: 650 }));
-      const frac = c.maxPatience ? c.patience / c.maxPatience : 1;
-      gui.bar(bx + 16 * S, by + bh - 12 * S, bw - 32 * S, 5 * S, frac, frac > 0.5 ? C.accentDark : frac > 0.25 ? '#c99a20' : C.red,
-        'rgba(0,0,0,0.12)');
-    }
-    // Panels
+    const portraitMode = gui.portrait;
     if (portraitMode) {
-      const ph = Math.min(gui.h * 0.56, 520 * S);
+      const ph = Math.min(gui.h * 0.56, 530 * S);
+      this._balloon(gui, c, left, right, barBottom + 12 * S, bottom - ph - 20 * S);
       this._mainPanel(gui, left, bottom - ph, right - left, ph);
     } else {
-      const pw = Math.min(440 * S, (right - left) * 0.48);
-      const top = barBottom + 8 * S;
-      if (c && c.step === 'id') this._idPanel(gui, left, top + 60 * S, Math.min(400 * S, (right - left) * 0.45), null);
-      const ptop = c && c.step !== 'id' && c.said && gui.w - pw - 2 * pad < 540 * S ? top + 60 * S : top + (c?.said ? 66 * S : 0);
-      this._mainPanel(gui, right - pw, ptop, pw, bottom - ptop);
+      const pw = Math.min(450 * S, (right - left) * 0.48);
+      const top = barBottom + 16 * S;
+      const idW = Math.min(400 * S, (right - left) * 0.42);
+      this._balloon(gui, c, left, right - pw - 16 * S, top, gui.h * 0.62);
+      if (c && c.step === 'id') this._idCard(gui, left, top + 92 * S, idW, c);
+      else if (this.stamped && this.stampT < 1.1) this._idCard(gui, left, top + 92 * S, idW, this.stamped.c, true);
+      this._mainPanel(gui, right - pw, top, pw, bottom - top);
     }
     this.drawModal(gui);
     this.drawPause(gui);
   }
 
+  _strikes(gui, x, y, w, n) {
+    const S = gui.S;
+    gui.text(t('hud.strikes'), x + w / 2, y + 15 * S, 11.5 * S, { font: 'label', color: C.red, align: 'center', upper: true });
+    for (let i = 0; i < 3; i++) {
+      const bx = x + w / 2 + (i - 1) * 24 * S;
+      const by = y + 33 * S;
+      gui.ctx.lineWidth = 2 * S;
+      gui.ctx.strokeStyle = C.ink;
+      gui.rr(bx - 9 * S, by - 9 * S, 18 * S, 18 * S, 3 * S);
+      gui.ctx.stroke();
+      if (i < n) gui.icon('cross', bx, by, 22 * S, C.red);
+    }
+  }
+
+  /** Comic balloon over the customer's head, with their patience as a burning fuse. */
+  _balloon(gui, c, left, right, top, maxBottom) {
+    if (!c || !c.said) return;
+    const S = gui.S;
+    const head = this.world.project(this.v3.set(c.x, 1.95, c.z));
+    const w = Math.min(right - left, 460 * S);
+    const lines = gui.wrap(c.said, w - 40 * S, 18 * S, 'body', 700);
+    const h = lines.length * 24 * S + 50 * S;
+    let x = head.visible ? head.x - w / 2 : (left + right) / 2 - w / 2;
+    x = clamp(x, left, right - w);
+    let y = head.visible ? head.y - h - 34 * S : top;
+    y = clamp(y, top, maxBottom - h);
+    const tail = head.visible && head.y > y + h + 6 * S ? [head.x, Math.min(head.y - 8 * S, y + h + 40 * S)] : [x + w * 0.3, y + h];
+    gui.balloon(x, y, w, h, tail[0], tail[1]);
+    gui.text(c.first.toUpperCase(), x + 18 * S, y + 22 * S, 13 * S, { font: 'label', color: C.red });
+    lines.forEach((l, i) => gui.text(l, x + 18 * S, y + 46 * S + i * 24 * S, 18 * S, { color: C.ink, weight: 700 }));
+    const frac = c.maxPatience ? clamp(c.patience / c.maxPatience, 0, 1) : 1;
+    const fy = y + 30 * S;
+    const fx = x + w - 110 * S;
+    gui.bar(fx, fy - 9 * S, 92 * S, 8 * S, frac, frac > 0.5 ? C.yellow : frac > 0.25 ? '#ff9a2e' : C.red, 'rgba(18,16,21,0.15)');
+    if (frac < 0.3) gui.text('!', fx - 10 * S, fy, 16 * S, { font: 'display', color: C.red, align: 'center' });
+  }
+
   _mainPanel(gui, x, y, w, h) {
     const c = this.sim.current;
+    const S = gui.S;
     if (!c) {
-      const p = panel(gui, x, y, w, Math.min(h, 120 * gui.S), 'Kassa');
-      gui.paragraph(this.sim.queue.length ? 'Next customer is coming to the counter...' : 'Quiet moment. Waiting for customers.',
-        p.x, p.y, p.w, 15 * gui.S, { color: C.dim });
+      const p = gui.card(x, y, w, Math.min(h, 120 * S), { tone: 'ink', label: t('cash.panel'), labelColor: C.yellow, labelText: C.ink });
+      gui.text(t(this.sim.queue.length ? 'cash.next' : 'cash.quiet'), p.x,
+        p.y + 34 * S, 18 * S, { color: C.paper, weight: 700, max: p.w });
+      gui.text(t('cash.walking'), p.x, p.y + 58 * S, 14 * S, { color: C.dim, weight: 600 });
       return;
     }
     if (c.step === 'id') {
-      if (gui.portrait) this._idPanel(gui, x, y, w, h);
-      else this._idButtonsOnly(gui, x, y, w);
-    } else if (c.step === 'order') this._orderPanel(gui, x, y, w, h);
-    else if (c.step === 'pay') this._payPanel(gui, x, y, w, h);
+      if (gui.portrait) {
+        const cardW = Math.min(w, 380 * S);
+        this._idCard(gui, x + (w - cardW) / 2, y, cardW, c);
+        this._idButtons(gui, x, y + cardW * 0.63 + 60 * S, w);
+      } else {
+        this._idPrompt(gui, x, y, w);
+      }
+    } else if (c.step === 'order') this._order(gui, x, y, w, h);
+    else if (c.step === 'pay') this._pay(gui, x, y, w, h);
   }
 
-  _idButtonsOnly(gui, x, y, w) {
+  _idPrompt(gui, x, y, w) {
     const S = gui.S;
-    const p = panel(gui, x, y, w, 210 * S, 'ID check');
-    gui.paragraph(`Today is ${dateText(this.sim.today)}. Is this customer 18+, is the ID still valid and does the photo match them?`,
-      p.x, p.y - 4 * S, p.w, 14 * S, { color: C.text });
-    const bw = (p.w - 10 * S) / 2;
-    gui.button(p.x, p.y + 92 * S, bw, 54 * S, 'ID OK', () => this.sim.checkId(true), { kind: 'primary', icon: 'check',
-      id: 'id-ok' });
-    gui.button(p.x + bw + 10 * S, p.y + 92 * S, bw, 54 * S, 'Weigeren', () => this.sim.checkId(false), { kind: 'danger',
-      icon: 'cross', id: 'id-no' });
+    const p = gui.card(x, y, w, 222 * S, { tone: 'ink', label: t('cash.idPanel'), labelColor: C.yellow, labelText: C.ink });
+    gui.text(t('cash.idQ'), p.x, p.y + 26 * S, 21 * S, { font: 'label', color: C.paper, upper: true,
+      max: p.w });
+    gui.paragraph(t('cash.today', { date: dateText(this.sim.today) }), p.x, p.y + 34 * S, p.w,
+      15 * S, { color: C.dim, weight: 600 });
+    this._idButtons(gui, p.x, p.y + 96 * S, p.w);
   }
 
-  _idPanel(gui, x, y, w, h) {
+  _idButtons(gui, x, y, w) {
     const S = gui.S;
-    const c = this.sim.current;
-    const cardW = Math.min(w, 400 * S);
+    const bw = (w - 14 * S) / 2;
+    gui.button(x, y, bw, 62 * S, t('cash.idOk'), () => this._decide(true), { kind: 'yellow', icon: 'check', id: 'id-ok', size: 22 * S });
+    gui.button(x + bw + 14 * S, y, bw, 62 * S, t('cash.refuse'), () => this._decide(false), { kind: 'red', icon: 'cross',
+      id: 'id-no', size: 22 * S });
+  }
+
+  _idCard(gui, x, y, cardW, c, stampOnly = false) {
+    const S = gui.S;
     const cardH = cardW * 0.63;
-    const cx = x + (w - cardW) / 2;
-    const cy = y;
     const ctx = gui.ctx;
-    ctx.save();
-    gui.rr(cx, cy, cardW, cardH, 16 * S);
-    const grad = ctx.createLinearGradient(cx, cy, cx + cardW, cy + cardH);
-    grad.addColorStop(0, '#e9f0f7');
-    grad.addColorStop(1, '#c9d9ea');
-    ctx.fillStyle = grad;
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 20;
-    ctx.fill();
-    ctx.restore();
     const u = cardW / 400;
-    gui.box(cx, cy, cardW, 34 * u, { r: 16 * S, fill: '#2b4c8c', stroke: null });
-    gui.box(cx, cy + 18 * u, cardW, 16 * u, { r: 0, fill: '#2b4c8c', stroke: null });
-    const nat = { NLD: 'NEDERLAND', DEU: 'DEUTSCHLAND', BEL: 'BELGIË', FRA: 'FRANCE', GBR: 'UNITED KINGDOM', ESP: 'ESPAÑA' }[c.nat];
-    gui.text(`${nat} · IDENTITEITSKAART`, cx + 14 * u, cy + 23 * u, 13 * u, { color: '#fff', weight: 800, max: cardW - 28 * u });
-    portrait(gui, cx + 14 * u, cy + 46 * u, 104 * u, 130 * u, c.idLook);
-    const fx = cx + 134 * u;
-    let fy = cy + 60 * u;
-    const field = (label, value, color = '#10201a') => {
-      gui.text(label, fx, fy, 10 * u, { color: '#5a6b7a', weight: 700 });
-      gui.text(value, fx, fy + 19 * u, 17 * u, { color, weight: 800, max: cardW - (fx - cx) - 12 * u });
-      fy += 42 * u;
-    };
-    const [first, ...rest] = c.name.split(' ');
-    field('NAAM / NAME', `${rest.join(' ').toUpperCase()}, ${first}`);
-    field('GEBOREN / DATE OF BIRTH', dateText(c.birth));
-    field('GELDIG TOT / EXPIRES', dateText(c.expiry));
-    gui.text(`<<<${c.nat}${c.name.replace(/ /g, '<').toUpperCase()}<<<<<<<<`, cx + 14 * u, cy + cardH - 12 * u, 11 * u,
-      { color: '#4a5a6a', weight: 600, family: 'monospace', max: cardW - 28 * u });
-    const by = cy + cardH + 10 * S;
-    gui.box(x, by, w, 30 * S, { r: 15, fill: 'rgba(10,20,14,0.85)', stroke: C.line });
-    gui.text(`Vandaag (today): ${dateText(this.sim.today)}`, x + w / 2, by + 20 * S, 14 * S, { align: 'center', weight: 800,
-      color: C.gold });
-    if (h != null) {
-      const bw = (w - 10 * S) / 2;
-      const bY = by + 40 * S;
-      gui.button(x, bY, bw, 54 * S, 'ID OK', () => this.sim.checkId(true), { kind: 'primary', icon: 'check', id: 'id-ok' });
-      gui.button(x + bw + 10 * S, bY, bw, 54 * S, 'Weigeren', () => this.sim.checkId(false), { kind: 'danger', icon: 'cross',
-        id: 'id-no' });
+    const tilt = -0.025;
+    gui.tilted(x + cardW / 2, y + cardH / 2, tilt, () => {
+      gui.rr(x + 6 * S, y + 6 * S, cardW, cardH, 16 * u);
+      ctx.fillStyle = C.ink;
+      ctx.fill();
+      gui.rr(x, y, cardW, cardH, 16 * u);
+      const grad = ctx.createLinearGradient(x, y, x + cardW, y + cardH);
+      grad.addColorStop(0, '#eef3f8');
+      grad.addColorStop(1, '#c8d8ea');
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = 3 * S;
+      ctx.strokeStyle = C.ink;
+      ctx.stroke();
+      ctx.save();
+      gui.rr(x, y, cardW, cardH, 16 * u);
+      ctx.clip();
+      ctx.fillStyle = '#2b4c8c';
+      ctx.fillRect(x, y, cardW, 36 * u);
+      ctx.restore();
+      const nat = { NLD: 'NEDERLAND', DEU: 'DEUTSCHLAND', BEL: 'BELGIË', FRA: 'FRANCE', GBR: 'UNITED KINGDOM', ESP: 'ESPAÑA' }[c.nat];
+      gui.text(`${nat} · IDENTITEITSKAART`, x + 14 * u, y + 25 * u, 15 * u, { font: 'label', color: '#fff', max: cardW - 28 * u });
+      portrait(gui, x + 14 * u, y + 48 * u, 104 * u, 130 * u, c.idLook);
+      ctx.lineWidth = 2 * u;
+      ctx.strokeStyle = 'rgba(18,16,21,0.5)';
+      gui.rr(x + 14 * u, y + 48 * u, 104 * u, 130 * u, 6);
+      ctx.stroke();
+      const fx = x + 134 * u;
+      let fy = y + 64 * u;
+      const field = (label, value) => {
+        gui.text(label, fx, fy, 12 * u, { font: 'label', color: '#5a6b7a' });
+        gui.text(value, fx, fy + 21 * u, 19 * u, { font: 'display', color: C.ink, max: cardW - (fx - x) - 12 * u });
+        fy += 44 * u;
+      };
+      const [first, ...rest] = c.name.split(' ');
+      field('NAAM / NAME', `${rest.join(' ').toUpperCase()}, ${first}`);
+      field('GEBOREN / BORN', dateText(c.birth));
+      field('GELDIG TOT / EXPIRES', dateText(c.expiry));
+      gui.text(`<<<${c.nat}${c.name.replace(/ /g, '<').toUpperCase()}<<<<<<<<`, x + 14 * u, y + cardH - 12 * u, 12 * u,
+        { font: RECEIPT, color: '#4a5a6a', max: cardW - 28 * u });
+    });
+    if (!stampOnly) {
+      gui.tape(t('cash.todayTape', { date: dateText(this.sim.today) }), x + cardW / 2, y + cardH + 26 * S, { size: 17 * S, color: C.yellow,
+        tilt: 0.02 });
+    }
+    if (stampOnly && this.stamped) {
+      const k = clamp(this.stampT * 5, 0, 1);
+      const scale = 1.6 - 0.6 * k;
+      const ok = this.stamped.ok;
+      gui.ctx.save();
+      gui.ctx.globalAlpha = k;
+      gui.stamp(t(ok ? 'stamp.approved' : 'stamp.refused'), x + cardW * 0.62, y + cardH * 0.55, 30 * S * scale,
+        ok ? '#1f6f5a' : C.red, ok ? -0.14 : 0.12);
+      gui.ctx.restore();
     }
   }
 
-  _orderPanel(gui, x, y, w, h) {
+  _order(gui, x, y, w, h) {
     const S = gui.S;
     const sim = this.sim;
     const c = sim.current;
-    const p = panel(gui, x, y, w, h);
+    const p = gui.card(x, y, w, h, { tone: 'ink', label: t('cash.panel'), labelColor: C.yellow, labelText: C.ink });
     const small = gui.portrait;
-    // tabs
     const tw = (p.w - 16 * S) / 3;
-    TABS.forEach(([id, label], i) => {
-      gui.button(p.x + i * (tw + 8 * S), p.y, tw, 38 * S, label, () => { this.tab = id; }, { selected: this.tab === id,
-        size: 14 * S, id: `tab-${id}` });
+    TABS.forEach((id, i) => {
+      gui.button(p.x + i * (tw + 8 * S), p.y, tw, 40 * S, t(`cash.tab.${id}`), () => { this.tab = id; }, { selected: this.tab === id,
+        size: 17 * S, id: `tab-${id}`, kind: 'ink' });
     });
-    // product grid
     const prods = Object.values(sim.products).filter((pr) => pr.cat === this.tab);
     const cols = 2;
-    const gw = (p.w - 8 * S) / cols;
+    const gw = (p.w - 10 * S) / cols;
     const rows = Math.ceil(prods.length / cols);
-    const fixed = 46 * S + 70 * S + 48 * S + 60 * S + 14 * S; // tabs, bag, rule buttons, checkout, gaps
-    const gh = Math.max(36 * S, Math.min((small ? 44 : 50) * S, (p.h - fixed) / rows - 6 * S));
-    let gy = p.y + 46 * S;
+    // leave the bag receipt room for every line in it (2 to 4 rows) before sizing the product buttons
+    const BOTTOM = 112 * S; // rule buttons + checkout under the bag
+    const bagFor = (n) => (46 + n * 22) * S;
+    const bagRows = clamp(Object.keys(c.bag).length, 2, 4);
+    const fixed = 52 * S + bagFor(bagRows) + 6 * S + BOTTOM;
+    const gh = Math.max(32 * S, Math.min((small ? 46 : 54) * S, (p.h - fixed) / rows - 8 * S));
+    let gy = p.y + 52 * S;
     prods.forEach((pr, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const bx = p.x + col * (gw + 8 * S);
-      const by = gy + row * (gh + 6 * S);
+      const bx = p.x + (i % cols) * (gw + 10 * S);
+      const by = gy + Math.floor(i / cols) * (gh + 8 * S);
       gui.button(bx, by, gw, gh, pr.name, () => { sim.addItem(pr.id, 1); sfx.pop(); }, {
-        sub: gh > 42 * S ? `${euro(pr.price)}${pr.unit === 'g' ? ' / gram' : ''}` : null, size: 14 * S, align: 'left',
-        id: `p-${pr.id}`,
-        badge: c.bag[pr.id] || null,
+        sub: gh > 46 * S ? (pr.unit === 'g' ? t('cash.perGram', { kind: t(`kind.${pr.kind}`) }) : t('cash.each')) : null, size: 17 * S, align: 'left',
+        id: `p-${pr.id}`, kind: c.bag[pr.id] ? 'yellow' : 'paper' });
+      // red price sticker
+      gui.tilted(bx + gw - 34 * S, by + gh / 2, 0.12, () => {
+        gui.sticker(bx + gw - 60 * S, by + gh / 2 - 13 * S, 52 * S, 26 * S, { fill: C.red, r: 5, shadow: 0, outline: 2 });
+        gui.text(euro(pr.price, pr.price % 1 ? 2 : 0), bx + gw - 34 * S, by + gh / 2 + 6 * S, 14 * S, { font: 'display',
+          color: C.paper, align: 'center', max: 46 * S });
       });
+      // how many are in the bag, as a round ink counter inside the button (not on its edge)
+      const q = c.bag[pr.id];
+      if (q) {
+        const qx = bx + gw - 78 * S;
+        const qy = by + gh / 2;
+        gui.ctx.beginPath();
+        gui.ctx.arc(qx, qy, 12 * S, 0, Math.PI * 2);
+        gui.ctx.fillStyle = C.ink;
+        gui.ctx.fill();
+        gui.text(`${q}${pr.unit === 'g' ? 'g' : '×'}`, qx, qy + 4.5 * S, 12 * S, { font: 'display', color: C.yellow,
+          align: 'center', max: 22 * S });
+      }
     });
-    gy += Math.ceil(prods.length / cols) * (gh + 6 * S) + 6 * S;
-    // bag
-    const bagH = Math.max(60 * S, p.y + p.h - gy - 108 * S);
-    gui.box(p.x, gy, p.w, bagH, { r: 12, fill: 'rgba(255,255,255,0.05)', stroke: C.line });
+    gy += rows * (gh + 8 * S) + 6 * S;
+    // the bag prints as a receipt
+    const bagH = Math.max(bagFor(2), p.y + p.h - gy - BOTTOM);
+    receipt(gui, p.x, gy, p.w, bagH, { tilt: 0.006 });
     const entries = Object.entries(c.bag);
-    gui.text('Tas / bag', p.x + 10 * S, gy + 20 * S, 12 * S, { color: C.dim, weight: 800 });
-    gui.text(`${sim.bagGrams()} g`, p.x + p.w - 10 * S, gy + 20 * S, 12 * S, { color: sim.bagGrams() > 5 ? C.red : C.dim,
-      weight: 800, align: 'right' });
-    const rowH = 30 * S;
-    const maxRows = Math.max(1, Math.floor((bagH - 30 * S) / rowH));
-    entries.slice(0, maxRows).forEach(([id, q], i) => {
+    const grams = sim.bagGrams();
+    gui.text(t('cash.bag'), p.x + 12 * S, gy + 20 * S, 14 * S, { font: 'label', color: C.ink });
+    const gw2 = 90 * S;
+    gui.bar(p.x + p.w - gw2 - 56 * S, gy + 10 * S, gw2, 10 * S, grams / 5, grams > 5 ? C.red : C.yellow, 'rgba(18,16,21,0.12)');
+    gui.text(`${grams}/5 g`, p.x + p.w - 12 * S, gy + 20 * S, 14 * S, { font: 'label', color: grams > 5 ? C.red : C.ink,
+      align: 'right' });
+    dashes(gui, p.x + 10 * S, gy + 28 * S, p.w - 20 * S);
+    const rowH = 22 * S;
+    const maxRows = Math.max(1, Math.floor((bagH - 46 * S) / rowH));
+    if (entries.length > maxRows) {
+      gui.text(`+${entries.length - maxRows + 1}…`, p.x + p.w - 12 * S, gy + bagH - 16 * S, 14 * S, { font: RECEIPT, weight: 700,
+        color: C.red, align: 'right' });
+    }
+    entries.slice(0, entries.length > maxRows ? maxRows - 1 : maxRows).forEach(([id, q], i) => {
       const pr = sim.products[id];
-      const ry = gy + 28 * S + i * rowH;
-      gui.text(`${q}${pr.unit === 'g' ? ' g' : '×'} ${pr.name}`, p.x + 10 * S, ry + 19 * S, 14 * S, { weight: 700,
-        max: p.w - 130 * S });
-      gui.text(euro(pr.price * q), p.x + p.w - 52 * S, ry + 19 * S, 14 * S, { align: 'right', color: C.dim });
-      gui.button(p.x + p.w - 44 * S, ry + 2 * S, 36 * S, 26 * S, '', () => sim.addItem(id, -1), { icon: 'minus',
-        id: `minus-${id}`, size: 12 * S });
+      const ry = gy + 33 * S + i * rowH;
+      gui.text(`${q}${pr.unit === 'g' ? 'g' : 'x'} ${pr.name.toUpperCase()}`, p.x + 12 * S, ry + 15 * S, 14 * S,
+        { font: RECEIPT, weight: 700, color: C.ink, max: p.w - 140 * S });
+      gui.text(euro(pr.price * q), p.x + p.w - 54 * S, ry + 15 * S, 14 * S, { font: RECEIPT, color: C.ink, align: 'right' });
+      gui.button(p.x + p.w - 44 * S, ry + 1 * S, 34 * S, 20 * S, '', () => sim.addItem(id, -1), { icon: 'minus',
+        id: `minus-${id}`, size: 12 * S, kind: 'ink' });
     });
-    if (!entries.length) gui.text('Tap products to add them', p.x + 10 * S, gy + 48 * S, 13 * S, { color: C.dim });
-    // rules + checkout
-    let ry = gy + bagH + 8 * S;
-    const rw = (p.w - 8 * S) / 2;
-    gui.button(p.x, ry, rw, 40 * S, 'Max 5 gram', () => sim.sayRule('max5'), { size: 13 * S, color: '#4a3b1a', id: 'r-max5' });
-    gui.button(p.x + rw + 8 * S, ry, rw, 40 * S, 'Geen alcohol', () => sim.sayRule('alcohol'), { size: 13 * S,
-      color: '#4a3b1a', id: 'r-alc' });
+    if (!entries.length) gui.text(t('cash.tapProduct'), p.x + 12 * S, gy + 50 * S, 15 * S, { font: RECEIPT, color: C.grey });
+    let ry = gy + bagH + 12 * S;
+    const rw = (p.w - 10 * S) / 2;
+    gui.button(p.x, ry, rw, 40 * S, t('cash.max5'), () => sim.sayRule('max5'), { size: 16 * S, id: 'r-max5', kind: 'paper',
+      textColor: C.red });
+    gui.button(p.x + rw + 10 * S, ry, rw, 40 * S, t('cash.noAlcohol'), () => sim.sayRule('alcohol'), { size: 16 * S, id: 'r-alc',
+      kind: 'paper', textColor: C.red });
     ry += 48 * S;
-    gui.button(p.x, ry, 90 * S, 52 * S, 'Leeg', () => sim.clearBag(), { kind: 'ghost', size: 14 * S, id: 'clear' });
-    gui.button(p.x + 98 * S, ry, p.w - 98 * S, 52 * S, `Afrekenen ${euro(sim.bagTotal())}`, () => this._checkout(), {
-      kind: 'primary', size: 17 * S, id: 'checkout' });
+    gui.button(p.x, ry, 86 * S, 52 * S, t('cash.clear'), () => sim.clearBag(), { kind: 'ink', size: 16 * S, id: 'clear' });
+    gui.button(p.x + 96 * S, ry, p.w - 96 * S, 52 * S, t('cash.checkout', { amt: euro(sim.bagTotal()) }), () => this._checkout(), {
+      kind: 'yellow', size: 21 * S, id: 'checkout' });
   }
 
-  _payPanel(gui, x, y, w, h) {
+  _pay(gui, x, y, w, h) {
     const S = gui.S;
     const sim = this.sim;
     const c = sim.current;
-    const p = panel(gui, x, y, w, Math.min(h, c.pay === 'pin' ? 220 * S : h), c.pay === 'pin' ? 'PIN' : 'Contant (cash)');
-    gui.text(`Totaal ${euro(c.total)}`, p.x, p.y + 22 * S, 22 * S, { weight: 900 });
     if (c.pay === 'pin') {
-      gui.paragraph('The customer wants to pay by card.', p.x, p.y + 30 * S, p.w, 14 * S, { color: C.dim });
-      gui.button(p.x, p.y + 80 * S, p.w, 64 * S, c.payTimer > 0 ? 'Processing...' : `PIN ${euro(c.total)}`, () => sim.payPin(), {
-        kind: 'primary', icon: 'card', size: 19 * S, disabled: c.payTimer > 0, id: 'pin' });
+      const ph = Math.min(h, 290 * S);
+      const p = gui.card(x, y, w, ph, { tone: 'ink', label: t('cash.pin'), labelColor: C.yellow, labelText: C.ink });
+      // the card terminal's little screen
+      const sw = p.w;
+      gui.sticker(p.x, p.y + 6 * S, sw, 88 * S, { fill: '#203b2c', r: 8, shadow: 0, outline: 3 });
+      gui.text(t('cash.toPay'), p.x + 14 * S, p.y + 30 * S, 14 * S, { font: RECEIPT, color: '#9fe0b8' });
+      gui.text(euro(c.total), p.x + sw - 14 * S, p.y + 76 * S, 36 * S, { font: RECEIPT, weight: 700, color: '#c9ffd9',
+        align: 'right' });
+      if (c.payTimer > 0) {
+        const dots = '.'.repeat(1 + (Math.floor(gui.time * 4) % 3));
+        gui.text(`${t('cash.busy')}${dots}`, p.x + 14 * S, p.y + 76 * S, 18 * S, { font: RECEIPT, color: '#9fe0b8' });
+      }
+      gui.button(p.x, p.y + 114 * S, p.w, 74 * S, c.payTimer > 0 ? t('cash.wait') : t('cash.pin'), () => sim.payPin(), {
+        kind: 'yellow', icon: 'card', size: 26 * S, disabled: c.payTimer > 0, id: 'pin',
+        sub: c.payTimer > 0 ? null : t('cash.pinSub') });
       return;
     }
-    gui.text(`Ontvangen ${euro(c.cashGiven)}`, p.x + p.w, p.y + 22 * S, 16 * S, { align: 'right', color: C.gold, weight: 800 });
-    gui.text('Count out the change:', p.x, p.y + 50 * S, 13 * S, { color: C.dim });
-    const cols = 3;
-    const gw = (p.w - 16 * S) / cols;
-    const gh = 46 * S;
-    CHANGE_UNITS.forEach((v, i) => {
-      const bx = p.x + (i % cols) * (gw + 8 * S);
-      const by = p.y + 62 * S + Math.floor(i / cols) * (gh + 6 * S);
-      const note = v >= 5;
-      gui.button(bx, by, gw, gh, euro(v, v < 1 ? 2 : 0), () => sim.addChange(v), { size: 15 * S, id: `ch-${v}`,
-        color: note ? '#2d5a46' : '#5a4a2a', icon: note ? 'cash' : null });
-    });
-    let yy = p.y + 62 * S + 3 * (gh + 6 * S) + 8 * S;
-    gui.box(p.x, yy, p.w, 48 * S, { r: 12, fill: 'rgba(255,255,255,0.06)', stroke: C.line });
-    gui.text('Wisselgeld', p.x + 12 * S, yy + 30 * S, 14 * S, { color: C.dim, weight: 700 });
-    gui.text(euro(c.change), p.x + p.w - 12 * S, yy + 32 * S, 22 * S, { align: 'right', weight: 900, color: C.gold });
-    yy += 58 * S;
-    gui.button(p.x, yy, 100 * S, 52 * S, 'Reset', () => sim.resetChange(), { kind: 'ghost', size: 14 * S, id: 'ch-reset' });
-    gui.button(p.x + 108 * S, yy, p.w - 108 * S, 52 * S, 'Geef wisselgeld', () => sim.giveChange(), { kind: 'primary',
-      size: 16 * S, id: 'give' });
+    const p = gui.card(x, y, w, h, { tone: 'ink', label: t('cash.cashPanel'), labelColor: C.yellow, labelText: C.ink });
+    gui.text(t('cash.received'), p.x, p.y + 20 * S, 14 * S, { font: 'label', color: C.dim });
+    this._note(gui, p.x, p.y + 28 * S, 118 * S, 58 * S, c.cashGiven, null, 'recv');
+    gui.text(t('cash.total'), p.x + p.w, p.y + 20 * S, 14 * S, { font: 'label', color: C.dim, align: 'right' });
+    gui.text(euro(c.total), p.x + p.w, p.y + 74 * S, 32 * S, { font: 'display', color: C.paper, align: 'right' });
+    gui.text(t('cash.count'), p.x, p.y + 116 * S, 15 * S, { font: 'label', color: C.yellow, upper: true });
+    const notes = CHANGE_UNITS.filter((v) => v >= 5);
+    const coins = CHANGE_UNITS.filter((v) => v < 5);
+    const nw = (p.w - 3 * 10 * S) / 4;
+    const nh = Math.min(58 * S, nw * 0.55);
+    let yy = p.y + 128 * S;
+    notes.forEach((v, i) => this._note(gui, p.x + i * (nw + 10 * S), yy, nw, nh, v, () => sim.addChange(v), `ch-${v}`));
+    yy += nh + 14 * S;
+    const cr = Math.min(28 * S, (p.w - 4 * 10 * S) / 10);
+    coins.forEach((v, i) => this._coin(gui, p.x + cr + i * ((p.w - 2 * cr) / (coins.length - 1)), yy + cr, cr, v,
+      () => sim.addChange(v), `ch-${v}`));
+    yy += cr * 2 + 18 * S;
+    receipt(gui, p.x, yy, p.w, 58 * S, { tilt: -0.006 });
+    gui.text(t('cash.change'), p.x + 14 * S, yy + 36 * S, 16 * S, { font: RECEIPT, weight: 700, color: C.ink });
+    gui.text(euro(c.change), p.x + p.w - 14 * S, yy + 38 * S, 28 * S, { font: 'display', color: C.red, align: 'right' });
+    yy += 74 * S;
+    gui.button(p.x, yy, 100 * S, 56 * S, t('cash.reset'), () => sim.resetChange(), { kind: 'ink', size: 16 * S, id: 'ch-reset' });
+    gui.button(p.x + 110 * S, yy, p.w - 110 * S, 56 * S, t('cash.give'), () => sim.giveChange(), { kind: 'yellow',
+      size: 20 * S, id: 'give' });
+  }
+
+  /** A euro note as a clickable sticker. */
+  _note(gui, x, y, w, h, value, onClick, id) {
+    const S = gui.S;
+    const pressed = onClick && gui.pressedId === id && gui.pointer.down && gui._inside(x, y, w, h);
+    const off = pressed ? 4 * S : 0;
+    const col = NOTE[value] || '#ccc';
+    gui.sticker(x + off, y + off, w, h, { fill: col, r: 5, shadow: pressed || !onClick ? 0 : 4, outline: 2.5 });
+    const c = gui.ctx;
+    c.save();
+    gui.rr(x + off, y + off, w, h, 5 * S);
+    c.clip();
+    c.fillStyle = 'rgba(255,255,255,0.28)';
+    c.beginPath();
+    c.arc(x + off + w * 0.72, y + off + h * 0.5, h * 0.42, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = 'rgba(0,0,0,0.12)';
+    for (let i = 0; i < 4; i++) c.fillRect(x + off + w * 0.08, y + off + h * (0.25 + i * 0.15), w * 0.35, 1.5 * S);
+    c.restore();
+    gui.text(String(value), x + off + 8 * S, y + off + h * 0.42, Math.min(22 * S, h * 0.42), { font: 'display', color: C.ink });
+    gui.text('EURO', x + off + w - 8 * S, y + off + h - 7 * S, 10 * S, { font: 'label', color: 'rgba(18,16,21,0.7)',
+      align: 'right' });
+    if (onClick) gui.region(x, y, w, h, onClick, { id, focusable: true, r: 5 * S });
+  }
+
+  _coin(gui, cx, cy, r, value, onClick, id) {
+    const S = gui.S;
+    const pressed = gui.pressedId === id && gui.pointer.down && gui._inside(cx - r, cy - r, r * 2, r * 2);
+    const off = pressed ? 3 * S : 0;
+    const c = gui.ctx;
+    const gold = '#e2b84a';
+    const silver = '#cfd2d4';
+    const outer = value === 2 ? silver : value === 1 ? gold : gold;
+    const inner = value === 2 ? gold : value === 1 ? silver : gold;
+    if (!pressed) {
+      c.beginPath();
+      c.arc(cx + 3.5 * S, cy + 3.5 * S, r, 0, Math.PI * 2);
+      c.fillStyle = C.ink;
+      c.fill();
+    }
+    c.beginPath();
+    c.arc(cx + off, cy + off, r, 0, Math.PI * 2);
+    c.fillStyle = outer;
+    c.fill();
+    c.lineWidth = 2.5 * S;
+    c.strokeStyle = C.ink;
+    c.stroke();
+    c.beginPath();
+    c.arc(cx + off, cy + off, r * 0.72, 0, Math.PI * 2);
+    c.fillStyle = inner;
+    c.fill();
+    c.lineWidth = 1.2 * S;
+    c.strokeStyle = 'rgba(18,16,21,0.35)';
+    c.stroke();
+    const label = value >= 1 ? `€${value}` : `${Math.round(value * 100)}c`;
+    gui.text(label, cx + off, cy + off + r * 0.22, r * 0.62, { font: 'display', color: C.ink, align: 'center' });
+    gui.region(cx - r, cy - r, r * 2, r * 2, onClick, { id, focusable: true, r });
   }
 }

@@ -1,13 +1,12 @@
 import * as THREE from 'three';
 import { C } from '../gui.js';
-import { BaseScreen, topBar } from './common.js';
+import { BaseScreen, hud, receipt } from './common.js';
 import { ServerSim } from '../sim/server.js';
 import { Crowd } from '../sim/crowd.js';
 import { clamp, clockText, euro, rng } from '../util.js';
 import { sfx } from '../audio.js';
+import { t as tr } from '../i18n.js';
 
-const TASK_LABEL = { order: 'Order', pickup: 'Pick up', serve: 'Serve', bill: 'Bill', clean: 'Clean', game: 'Game',
-  gameDeliver: 'Game', fetchGame: 'Get game' };
 
 export class ServerScreen extends BaseScreen {
   enter() {
@@ -80,7 +79,7 @@ export class ServerScreen extends BaseScreen {
     if (r.ok) sfx.pop();
     else if (r.reason) {
       sfx.error();
-      this.toast(r.reason, C.gold);
+      this.toast(r.reason, C.paper);
     }
     return r;
   }
@@ -96,11 +95,12 @@ export class ServerScreen extends BaseScreen {
 
   _tapHost() {
     const r = this._result(this.sim.selectHost());
-    if (r.ok) this.toast(`Group of ${r.group.size}: tap a free table that fits them`, C.blue);
+    if (r.ok) this.toast(tr('srv.groupPick', { n: r.group.size }), C.yellow);
   }
 
   update(dt) {
     const sim = this.sim;
+    this.mascot.update(dt);
     if (!this.paused && !this.modal) {
       sim.update(dt);
       this.crowd.update(dt);
@@ -210,14 +210,15 @@ export class ServerScreen extends BaseScreen {
         break;
       case 'paid':
         sfx.cash();
-        this._floatAt(e.table, `+${euro(e.total + e.tip)}`, C.accent);
+        this._floatAt(e.table, `+${euro(e.total + e.tip)}`, C.yellow);
+        this.mascot.react('good');
         break;
       case 'served':
         sfx.pop();
         break;
       case 'game':
         sfx.ok();
-        this.toast(`${e.table} got ${e.name}`, C.accent);
+        this.toast(tr('srv.gotGame', { table: e.table, name: e.name }), C.yellow);
         break;
       case 'walkout':
         sfx.sad();
@@ -226,10 +227,10 @@ export class ServerScreen extends BaseScreen {
         break;
       case 'terrace':
         sfx.fanfare();
-        this.toast('14:00: the rooftop terrace is open! Tap Dakterras to go up.', C.gold);
+        this.toast(tr('srv.terrace'), C.yellow);
         break;
       case 'info':
-        this.toast(e.text, C.dim);
+        this.toast(e.text, C.paper);
         break;
       default:
         break;
@@ -255,12 +256,11 @@ export class ServerScreen extends BaseScreen {
     g.save.stars.server = Math.max(g.save.stars.server, stars);
     g.persist();
     g.setScreen('results', {
-      mode: 'server', title: 'Shift over!', subtitle: 'Bediening · 12:00 to 01:00', score, stars,
+      mode: 'server', title: tr('res.receipt'), subtitle: tr('res.serverSub'), score, stars,
       best: newBest ? score : best, newBest, vrAnchor: this.vrAnchor(),
       lines: [
-        ['Groups served', s.groupsServed], ['Items served', s.itemsServed], ['Revenue', euro(s.revenue)],
-        ['Tips', euro(s.tips), C.gold], ['Board games brought', s.gamesBrought, C.accent],
-        ['Walk-outs', s.walkouts, s.walkouts ? C.red : null],
+        [tr('res.groups'), s.groupsServed], [tr('res.items'), s.itemsServed], [tr('res.revenue'), euro(s.revenue)],
+        [tr('res.tips'), euro(s.tips)], [tr('res.games'), s.gamesBrought], [tr('res.walkouts'), s.walkouts],
       ],
     });
   }
@@ -295,54 +295,64 @@ export class ServerScreen extends BaseScreen {
     const S = gui.S;
     const sim = this.sim;
     if (!this.game.xr?.active) this._targets(gui);
-    topBar(gui, [
-      { label: 'TIJD', value: clockText(sim.hour) },
-      { label: 'OMZET', value: euro(sim.stats.revenue, 0), color: C.accent },
-      { label: 'FOOI', value: euro(sim.stats.tips, 0), color: C.gold },
-      { label: 'WEGGELOPEN', value: sim.stats.walkouts, color: sim.stats.walkouts ? C.red : C.dim, w: 96 },
-      { label: 'KEUKEN', value: sim.kitchenOpen ? 'open' : 'dicht', color: sim.kitchenOpen ? C.accent : C.dim, w: 80 },
-    ], { right: { w: 52 * S, label: '', icon: 'pause', onClick: () => this.onPause() } });
-    // bottom: level switch + task list
-    const bh = 50 * S;
-    const by = gui.h - gui.safe.bottom - bh - 10 * S;
-    const lx = gui.safe.left + 10 * S;
+    hud(gui, this, [
+      { label: tr('hud.time'), value: clockText(sim.hour) },
+      { label: tr('hud.revenue'), value: euro(sim.stats.revenue, 0) },
+      { label: tr('hud.tips'), value: euro(sim.stats.tips, 0) },
+      { label: tr('hud.walkouts'), value: sim.stats.walkouts, color: sim.stats.walkouts ? C.red : C.ink, w: 98 },
+      { label: tr('hud.kitchen'), value: tr(sim.kitchenOpen ? 'hud.open' : 'hud.closed'), color: sim.kitchenOpen ? C.ink : C.red, w: 84 },
+    ], { onPause: () => this.onPause() });
+    const bh = 58 * S;
+    const by = gui.h - gui.safe.bottom - bh - 12 * S;
+    const lx = gui.safe.left + 12 * S;
     const terraceNeeds = sim.tables.filter((t) => t.level === 1 && (t.state === 'dirty' || (t.group &&
       ['ready', 'wantsBill'].includes(sim.groups.find((g) => g.id === t.group)?.state)))).length;
-    gui.button(lx, by, 150 * S, bh, this.level === 0 ? 'Dakterras' : 'Beneden', () => this.setLevel(1 - this.level), {
-      icon: 'stairs', size: 15 * S, kind: 'gold', badge: this.level === 0 && terraceNeeds ? terraceNeeds : null,
-      disabled: !sim.terraceOpen && this.level === 0, id: 'level' });
-    let x = lx + 160 * S;
+    gui.button(lx, by, 168 * S, bh, tr(this.level === 0 ? 'srv.up' : 'srv.down'), () => this.setLevel(1 - this.level), {
+      icon: 'stairs', size: 19 * S, kind: 'yellow', badge: this.level === 0 && terraceNeeds ? terraceNeeds : null,
+      disabled: !sim.terraceOpen && this.level === 0, id: 'level', tilt: -0.02 });
+    // the waiter's to-do list as order tickets
+    let x = lx + 184 * S;
     const w = sim.waiter;
     const tasks = [w.action, ...w.queue].filter(Boolean);
-    const maxX = gui.w - gui.safe.right - 10 * S - 110 * S;
+    const maxX = gui.w - gui.safe.right - 12 * S - 120 * S;
     tasks.forEach((a, i) => {
-      const label = `${i === 0 ? '▶ ' : `${i}. `}${TASK_LABEL[a.type] || a.type}${a.table ? ` ${a.table}` : ''}`;
-      const tw = gui.measure(label, 13 * S, 800) + 22 * S;
+      const label = `${tr(`task.${a.type}`)}${a.table ? ` ${a.table}` : ''}`;
+      const tw = Math.max(70 * S, gui.measure(label, 16 * S, 'label') + 26 * S);
       if (x + tw > maxX) return;
-      gui.box(x, by + 8 * S, tw, bh - 16 * S, { r: 12, fill: i === 0 ? C.accent : 'rgba(10,20,14,0.85)', stroke: C.line });
-      gui.text(label, x + tw / 2, by + bh / 2 + 5 * S, 13 * S, { align: 'center', weight: 800, color: i === 0 ? C.dark : C.text });
-      x += tw + 6 * S;
+      const now = i === 0;
+      const ty = by + (now ? -6 : 4) * S;
+      gui.tilted(x + tw / 2, ty + bh / 2, i % 2 ? 0.04 : -0.03, () => {
+        receipt(gui, x, ty, tw, bh - 6 * S, { tilt: 0 });
+        gui.text(now ? tr('srv.now') : `#${i}`, x + 10 * S, ty + 18 * S, 12 * S, { font: 'label', color: now ? C.red : C.grey });
+        gui.text(label, x + 10 * S, ty + 40 * S, 16 * S, { font: 'label', color: C.ink, upper: true, max: tw - 16 * S });
+      });
+      x += tw + 8 * S;
     });
     if (tasks.length > 1) {
-      gui.button(gui.w - gui.safe.right - 110 * S, by, 100 * S, bh, 'Wis lijst', () => sim.cancelQueue(), { kind: 'ghost',
-        size: 13 * S, id: 'clearq' });
+      gui.button(gui.w - gui.safe.right - 12 * S - 110 * S, by + 6 * S, 110 * S, bh - 12 * S, tr('srv.clearList'),
+        () => sim.cancelQueue(), { kind: 'ink', size: 16 * S, id: 'clearq' });
     }
-    // tray summary
+    // what's on the tray
     if (w.carry.length || w.game) {
-      const items = w.carry.map((c) => `${sim.menu.find((m) => m.id === c.item)?.name} → ${c.table}`);
-      if (w.game) items.push('Board game');
-      const tw = Math.min(gui.w - 20 * S, 300 * S);
-      const ty = by - 12 * S - items.length * 20 * S - 14 * S;
-      gui.box(lx, ty, tw, items.length * 20 * S + 12 * S, { r: 12, fill: 'rgba(10,20,14,0.85)', stroke: C.line });
-      items.forEach((s, i) => gui.text(s, lx + 12 * S, ty + 22 * S + i * 20 * S, 13 * S, { weight: 700, max: tw - 24 * S }));
+      const items = w.carry.map((c) => [sim.menu.find((m) => m.id === c.item)?.name, c.table]);
+      if (w.game) items.push([tr('srv.gameItem'), '']);
+      const tw = Math.min(gui.w - 24 * S, 290 * S);
+      const th = 40 * S + items.length * 24 * S;
+      const ty = by - th - 18 * S;
+      receipt(gui, lx, ty, tw, th, { tilt: -0.01 });
+      gui.text(tr('srv.tray'), lx + 12 * S, ty + 22 * S, 14 * S, { font: 'label', color: C.red });
+      items.forEach(([name, table], i) => {
+        gui.text(String(name).toUpperCase(), lx + 12 * S, ty + 46 * S + i * 24 * S, 15 * S, { font: 'label', color: C.ink,
+          max: tw - 70 * S });
+        gui.text(table, lx + tw - 12 * S, ty + 46 * S + i * 24 * S, 15 * S, { font: 'display', color: C.red, align: 'right' });
+      });
     }
     if (sim.selectedGroup) {
-      const g = sim.groups.find((x) => x.id === sim.selectedGroup);
+      const g = sim.groups.find((x2) => x2.id === sim.selectedGroup);
       if (g) {
-        const t = `Seat the group of ${g.size}: tap a free table`;
-        const tw = gui.measure(t, 15 * S, 800) + 40 * S;
-        gui.box(gui.w / 2 - tw / 2, gui.safe.top + 66 * S, tw, 38 * S, { r: 19, fill: C.blue, stroke: null });
-        gui.text(t, gui.w / 2, gui.safe.top + 90 * S, 15 * S, { align: 'center', weight: 800, color: C.dark });
+        gui.tape(tr('srv.groupTape', { n: g.size }), gui.w / 2, gui.safe.top + 90 * S,
+          { size: 19 * S, color: C.yellow, tilt: -0.015 });
+        gui.toastShift = 48;
       }
     }
     this.drawModal(gui);

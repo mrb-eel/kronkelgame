@@ -5,7 +5,8 @@ centred on the place: work the counter, run the floor, or build and manage your 
 
 It runs in the browser on **desktop, phones and tablets** (installable to the home screen and playable offline),
 with **game controllers**, and in **VR headsets** through WebXR (Quest, Pico, Vision Pro and other WebXR browsers).
-All 3D models are built in **Blender**.
+All 3D models are built in **Blender**. It plays in **Nederlands, English and Deutsch**: the language follows your
+browser, and the NL / EN / DE stickers on the title screen (or *Settings*) switch it at any time.
 
 ![Title screen](docs/screenshots/game_title.jpg)
 
@@ -13,16 +14,33 @@ All 3D models are built in **Blender**.
 | --- | --- | --- |
 | ![Kassa](docs/screenshots/game_kassa_id.jpg) | ![Bediening](docs/screenshots/game_bediening.jpg) | ![Tycoon](docs/screenshots/game_tycoon.jpg) |
 
-| Phone | The alley (Blender render) | Inside (Blender render) |
+| Phone (Deutsch) | Shift receipt | Day report |
 | --- | --- | --- |
-| ![Phone](docs/screenshots/game_phone_kassa.jpg) | ![Alley](docs/screenshots/blender_alley.jpg) | ![Interior](docs/screenshots/blender_shop_interior.jpg) |
+| ![Phone](docs/screenshots/game_phone_kassa.jpg) | ![Receipt](docs/screenshots/game_receipt.jpg) | ![Report](docs/screenshots/game_tycoon_report.jpg) |
+
+| Settings and languages | The alley (Blender render) | Inside (Blender render) |
+| --- | --- | --- |
+| ![Settings](docs/screenshots/game_settings.jpg) | ![Alley](docs/screenshots/blender_alley.jpg) | ![Interior](docs/screenshots/blender_shop_interior.jpg) |
+
+## The look
+
+The UI is built from Kronkel's own street identity instead of a generic game skin:
+
+- **The smiley with sunglasses** is the mascot: it bobs in the HUD, hops when you do well and shakes when you mess up,
+  and it's the rating (smileys, not stars).
+- **The alley sign**: headings are red letters on white tiles with a dark red frame, like the tall KRONKEL blade sign,
+  with the black COFFEESHOP strip under it.
+- **Paper things from a shop counter**: stickers with thick ink outlines and hard shadows, tape labels, comic balloons
+  for what customers say, rubber stamps (GOEDGEKEURD / GEWEIGERD), and shifts and days that end on a printed receipt.
+- **Colours** come from the logo and the interior: smiley yellow, ink black, sign red, paper cream, with the purple
+  LED glow of the shop behind it. Type is Archivo Black for the big words and Barlow / Barlow Condensed for the rest.
 
 ## Game modes
 
-| Mode | You are | What you do |
+| Mode (NL / EN / DE) | You are | What you do |
 | --- | --- | --- |
-| **Kassa** | The cashier behind the glass | Check IDs (18+, not expired, photo matches, birthday today counts), take orders, enforce the 5 gram rule, refuse alcohol, ring it up, take PIN or count out change. Three Handhaving strikes and the shop gets closed. |
-| **Bediening** | The floor staff | Seat groups from the door, take orders, run shakes and food from the pass (kitchen open 12:00 to 22:00), bring board games from the shelf, settle the bill, clean up, take the stairs to the rooftop terrace. Bubbles with a mood ring show who needs you. |
+| **Kassa** / Counter / Kasse | The cashier behind the glass | Check IDs (18+, not expired, photo matches, birthday today counts), take orders, enforce the 5 gram rule, refuse alcohol, ring it up, take PIN or count out change. Three Handhaving strikes and the shop gets closed. |
+| **Bediening** / Service / Bedienung | The floor staff | Seat groups from the door, take orders, run shakes and food from the pass (kitchen open 12:00 to 22:00), bring board games from the shelf, settle the bill, clean up, take the stairs to the rooftop terrace. Bubbles with a mood ring show who needs you. |
 | **Tycoon** | The owner | Each morning buy stock (never more than 500 g, as the law says), hire staff, set prices and ID policy, buy upgrades (pool tables, fireplace lounge, milkshake bar, live music corner, premium shelf, house strain, rooftop terrace...). Watch the day play out, read the report. Weekends, rain, NEC home games, Handhaving inspections and the Vierdaagse in July all matter. |
 
 The Dutch coffeeshop rules (18+ with ID, max 5 gram per person, no alcohol, max 500 gram in stock) are the game
@@ -61,6 +79,7 @@ which Pages provides.
 ```
 index.html            entry point (import map for three.js, boot screen)
 src/main.js           game loop, screen manager
+src/i18n.js           translations: t('key'), language detection; dictionaries in src/lang/{nl,en,de}.js
 src/world.js          three.js: loads the Blender models, lighting, cameras, people, props, bubbles, picking
 src/gui.js            canvas GUI used on screen and on the VR panel (focus navigation for keyboard/gamepad)
 src/input.js          touch, mouse, keyboard, gamepad
@@ -72,7 +91,7 @@ assets/layout.json    shop layout shared by Blender and the game (tables, seats,
 assets/gamedata.json  menu, rules, upgrades, staff, events
 assets/models/        compressed .glb files exported from Blender
 blender/              Blender build scripts + editable .blend files in blender/out/
-tests/                node --test suites that play every mode with a bot
+tests/                node --test suites that play every mode with a bot and check the translations
 ```
 
 ### 3D models (Blender)
@@ -101,7 +120,13 @@ npm test
 ```
 
 The suites check pathfinding, the rules (ID checks, 5 gram trimming, change), and let bots play full Kassa,
-Bediening and Tycoon runs (60 in-game days, including the 2026 Vierdaagse on 21–24 July).
+Bediening and Tycoon runs (60 in-game days, including the 2026 Vierdaagse on 21–24 July). They also check that
+Dutch, English and German have exactly the same keys and placeholders.
+
+### Adding a language
+
+Copy `src/lang/en.js` to a new file, translate the values (keep the `{placeholders}` and the length of the lists),
+add it to `DICT` and `LANGS` in `src/i18n.js`, and run `npm test`.
 
 ## Please read
 
@@ -113,5 +138,5 @@ Bediening and Tycoon runs (60 in-game days, including the 2026 Vierdaagse on 21�
 ## Credits
 
 - 3D models: Blender (scripts in `blender/`), engine: [three.js](https://threejs.org) (MIT, `vendor/three/LICENSE`)
-- Fonts: Inter (SIL OFL, `assets/fonts/LICENSE-Inter.txt`), DejaVu Serif (`assets/fonts/LICENSE-DejaVu.txt`)
+- Fonts: Archivo Black and Barlow (SIL OFL, `assets/fonts/LICENSE-ArchivoBlack.txt`, `assets/fonts/LICENSE-Barlow.txt`)
 - Music and sound effects are synthesised in the browser.

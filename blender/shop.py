@@ -135,7 +135,7 @@ def materials():
     M["fridge"] = mat("FridgeLight", "#e8f4ff", 0.3, emit="#d8ecff", strength=2.5)
     M["menu"] = mat("MenuBoard", "#151815", 0.6)
     M["menutext"] = mat("MenuText", "#f6efd2", 0.5, emit="#f6efd2", strength=1.6)
-    M["menugreen"] = mat("MenuAccent", "#9fe07a", 0.5, emit="#8fd66a", strength=2.0)
+    M["menugreen"] = mat("MenuAccent", "#ffc814", 0.5, emit="#ffc014", strength=2.0)
     M["chalk"] = mat("Chalk", "#efefe8", 0.9, emit="#efefe8", strength=0.25)
     M["board"] = mat("Chalkboard", "#232a26", 0.9)
     M["leaf"] = mat("Leaf", "#3f7d3a", 0.7)
@@ -443,13 +443,14 @@ def shop_counter():
     out.append(text("menutitle", "KRONKEL  MENU", (4.1, 3.06, -5.865), 0.12, M["menugreen"], 0.0))
     for i, w in enumerate(DATA["weed"]):
         y = 2.88 - i * 0.1
-        out.append(text(f"mw{i}", w["name"].upper(), (2.1, y, -5.865), 0.065, M["menutext"], 0.0, align="LEFT"))
-        out.append(text(f"mwp{i}", f"€{w['price']:.0f}", (3.9, y, -5.865), 0.065, M["menugreen"], 0.0, align="RIGHT"))
+        out.append(text(f"mw{i}", w["name"].upper(), (2.1, y, -5.865), 0.075, M["menutext"], 0.0, align="LEFT", font_kind="bold"))
+        out.append(text(f"mwp{i}", f"€{w['price']:.0f}", (3.9, y, -5.865), 0.075, M["menugreen"], 0.0, align="RIGHT", font_kind="bold"))
     for i, w in enumerate(DATA["hash"] + DATA["extras"][:2]):
         y = 2.88 - i * 0.1
-        out.append(text(f"mh{i}", w["name"].upper(), (4.3, y, -5.865), 0.065, M["menutext"], 0.0, align="LEFT"))
-        out.append(text(f"mhp{i}", f"€{w['price']:.0f}", (6.1, y, -5.865), 0.065, M["menugreen"], 0.0, align="RIGHT"))
-    out.append(text("menufoot", "PRIJS PER GRAM  ·  MAX 5 GRAM  ·  18+", (4.1, 2.1, -5.865), 0.05, M["menutext"], 0.0))
+        out.append(text(f"mh{i}", w["name"].upper(), (4.3, y, -5.865), 0.075, M["menutext"], 0.0, align="LEFT", font_kind="bold"))
+        out.append(text(f"mhp{i}", f"€{w['price']:.0f}", (6.1, y, -5.865), 0.075, M["menugreen"], 0.0, align="RIGHT", font_kind="bold"))
+    out.append(text("menufoot", "PRIJS PER GRAM  ·  MAX 5 GRAM  ·  18+", (4.1, 2.1, -5.865), 0.06, M["menutext"], 0.0,
+                    font_kind="bold"))
     return out
 
 

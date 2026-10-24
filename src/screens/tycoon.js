@@ -1,16 +1,14 @@
-import { C, SERIF } from '../gui.js';
-import { BaseScreen, topBar, panel } from './common.js';
-import { TycoonSim, newTycoon, dateOf, weekday, DAY_NAMES, GOAL_LIST, TYCOON_HOURS } from '../sim/tycoon.js';
+import { C } from '../gui.js';
+import { BaseScreen, hud, receipt, dashes, rline, RECEIPT } from './common.js';
+import { TycoonSim, newTycoon, dateOf, weekday, GOAL_LIST, TYCOON_HOURS, goalText } from '../sim/tycoon.js';
 import { Crowd } from '../sim/crowd.js';
 import { Nav } from '../sim/nav.js';
 import { clamp, clockText, euro, rng } from '../util.js';
 import { sfx } from '../audio.js';
+import { t, tl, td } from '../i18n.js';
 
-const TABS = [['overview', 'Vandaag'], ['stock', 'Voorraad'], ['staff', 'Personeel'], ['upgrades', 'Upgrades'],
-  ['prices', 'Prijzen']];
+const TABS = ['overview', 'stock', 'staff', 'upgrades', 'prices'];
 const SEC_PER_HOUR = 6;
-const WEATHER = { sunny: 'Zonnig', cloudy: 'Bewolkt', rain: 'Regen' };
-const MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
 export class TycoonScreen extends BaseScreen {
   enter() {
@@ -73,8 +71,8 @@ export class TycoonScreen extends BaseScreen {
   onTab(d) {
     if (this.overlay) return this.overlay.onTab(d);
     if (this.s.phase !== 'plan') return;
-    const i = TABS.findIndex((t) => t[0] === this.tab);
-    this.tab = TABS[(i + d + TABS.length) % TABS.length][0];
+    const i = TABS.indexOf(this.tab);
+    this.tab = TABS[(i + d + TABS.length) % TABS.length];
   }
 
   onDrag(dx) {
@@ -102,6 +100,7 @@ export class TycoonScreen extends BaseScreen {
 
   update(dt) {
     const s = this.s;
+    this.mascot.update(dt);
     for (const e of this.sim.events.splice(0)) this._event(e);
     if (s.phase === 'run' && !this.paused) {
       this.hourT += dt * this.speed;
@@ -129,7 +128,7 @@ export class TycoonScreen extends BaseScreen {
       case 'soldout':
       case 'queue':
         sfx.error();
-        this.toast(e.text, C.gold);
+        this.toast(e.text, C.red);
         break;
       case 'fine':
         sfx.sad();
@@ -137,11 +136,11 @@ export class TycoonScreen extends BaseScreen {
         this.toast(e.text, C.red);
         break;
       case 'ok':
-        this.toast(e.text, C.accent);
+        this.toast(e.text, C.yellow);
         break;
       case 'goal':
         sfx.fanfare();
-        (this.newGoals ||= []).push(e.text.replace(/^Goal: /, ''));
+        (this.newGoals ||= []).push(goalText(e.id));
         break;
       default:
         break;
@@ -163,20 +162,23 @@ export class TycoonScreen extends BaseScreen {
     const S = gui.S;
     const s = this.s;
     const d = dateOf(s);
-    const dateStr = `${DAY_NAMES[weekday(s)].slice(0, 2)} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+    const dateStr = `${tl('days')[weekday(s)].slice(0, 2)} ${d.getDate()} ${tl('months')[d.getMonth()]}`;
     const run = s.phase === 'run';
-    topBar(gui, [
-      { label: `DAG ${s.day}`, value: dateStr, w: 108 },
-      { label: 'TIJD', value: run ? clockText(TYCOON_HOURS[Math.min(this.sim.run.hourIdx, 14)] + this.hourT / SEC_PER_HOUR) :
+    hud(gui, this, [
+      { label: t('hud.day', { n: s.day }), value: dateStr, w: 112 },
+      { label: t('hud.time'), value: run ? clockText(TYCOON_HOURS[Math.min(this.sim.run.hourIdx, 14)] + this.hourT / SEC_PER_HOUR) :
         s.phase === 'plan' ? '09:30' : '01:00' },
-      { label: 'KAS', value: euro(s.cash, 0), color: s.cash < 0 ? C.red : C.accent, w: 104 },
-      { label: 'REPUTATIE', w: 120, draw: (x, y, w) => {
-        gui.text('REPUTATIE', x + w / 2, y + 15 * S, 10 * S, { align: 'center', color: C.dim, weight: 700 });
-        gui.stars(x + 12 * S, y + 30 * S, 7 * S, s.rep);
+      { label: t('hud.cash'), value: euro(s.cash, 0), color: s.cash < 0 ? C.red : C.ink, w: 112 },
+      { label: t('hud.rep'), w: 136, draw: (x, y, w) => {
+        gui.text(t('hud.rep'), x + w / 2, y + 15 * S, 11.5 * S, { font: 'label', color: C.red, align: 'center', upper: true });
+        gui.ctx.fillStyle = C.ink;
+        gui.rr(x + 8 * S, y + 21 * S, w - 16 * S, 24 * S, 12 * S);
+        gui.ctx.fill();
+        gui.smileys(x + 12 * S, y + 33 * S, 10 * S, s.rep);
       } },
-      { label: 'VOORRAAD', value: `${Math.round(this.sim.stockTotal())} g`, w: 92,
-        color: this.sim.stockTotal() < 80 ? C.red : C.text },
-    ], { right: { w: 52 * S, label: '', icon: 'pause', onClick: () => this.onPause() } });
+      { label: t('hud.stock'), value: `${Math.round(this.sim.stockTotal())}g`, w: 96,
+        color: this.sim.stockTotal() < 80 ? C.red : C.ink },
+    ], { onPause: () => this.onPause() });
     if (s.phase === 'plan') this._drawPlan(gui);
     else if (s.phase === 'run') this._drawRun(gui);
     else this._drawReport(gui);
@@ -188,66 +190,77 @@ export class TycoonScreen extends BaseScreen {
   _drawPlan(gui) {
     const S = gui.S;
     const portrait = gui.portrait;
-    const top = gui.safe.top + 64 * S;
-    const bottom = gui.h - gui.safe.bottom - 10 * S;
-    const left = gui.safe.left + 10 * S;
-    const w = portrait ? gui.w - left * 2 : Math.min(560 * S, gui.w * 0.52);
-    const h = portrait ? (bottom - top) * 0.62 : bottom - top - 70 * S;
-    const y = portrait ? bottom - h - 66 * S : top;
-    const p = panel(gui, left, y, w, h);
+    const top = gui.safe.top + 78 * S;
+    const bottom = gui.h - gui.safe.bottom - 12 * S;
+    const left = gui.safe.left + 12 * S;
+    const w = portrait ? gui.w - left * 2 : Math.min(580 * S, gui.w * 0.54);
+    const h = portrait ? (bottom - top) * 0.66 : bottom - top - 6 * S;
+    const y = portrait ? bottom - h - 78 * S : top;
+    const s = this.s;
+    const p = gui.card(left, y, w, h, { tone: 'ink', label: t('ty.morning', { day: tl('days')[weekday(s)] }), labelColor: C.yellow,
+      labelText: C.ink });
     const tw = (p.w - 6 * S * (TABS.length - 1)) / TABS.length;
-    TABS.forEach(([id, label], i) => {
-      gui.button(p.x + i * (tw + 6 * S), p.y, tw, 38 * S, label, () => { this.tab = id; }, { selected: this.tab === id,
-        size: 13 * S, id: `tt-${id}` });
+    TABS.forEach((id, i) => {
+      gui.button(p.x + i * (tw + 6 * S), p.y, tw, 40 * S, t(`ty.tab.${id}`), () => { this.tab = id; }, { selected: this.tab === id,
+        size: 15 * S, id: `tt-${id}`, kind: 'ink' });
     });
-    const body = { x: p.x, y: p.y + 50 * S, w: p.w, h: p.h - 50 * S };
+    const body = { x: p.x, y: p.y + 56 * S, w: p.w, h: p.h - 56 * S };
     ({ overview: this._tabOverview, stock: this._tabStock, staff: this._tabStaff, upgrades: this._tabUpgrades,
       prices: this._tabPrices })[this.tab].call(this, gui, body);
-    const bw = portrait ? gui.w - left * 2 : Math.min(320 * S, gui.w * 0.3);
-    gui.button(portrait ? left : gui.w - gui.safe.right - 10 * S - bw, bottom - 58 * S, bw, 58 * S, 'Open de winkel', () => this.openShop(),
-      { kind: 'primary', icon: 'play', size: 19 * S, sub: `wages ${euro(this.sim.wages(), 0)} · rent €380`, id: 'open' });
+    const bw = portrait ? gui.w - left * 2 : Math.min(330 * S, gui.w * 0.3);
+    gui.button(portrait ? left : gui.w - gui.safe.right - 12 * S - bw, bottom - 66 * S, bw, 66 * S, t('ty.open'), () => this.openShop(),
+      { kind: 'yellow', icon: 'play', size: 24 * S, sub: t('ty.openSub', { w: euro(this.sim.wages(), 0), r: euro(380, 0) }), id: 'open', tilt: -0.015 });
   }
 
   _tabOverview(gui, b) {
     const S = gui.S;
     const s = this.s;
     let y = b.y;
-    gui.text(`${DAY_NAMES[weekday(s)]} ${dateOf(s).getDate()} ${MONTHS[dateOf(s).getMonth()]} · ${WEATHER[s.weather]}`, b.x, y + 16 * S,
-      16 * S, { weight: 800 });
-    y += 30 * S;
+    const d = dateOf(s);
+    gui.text(`${d.getDate()} ${tl('months')[d.getMonth()]} · ${t(`weather.${s.weather}`)}`, b.x, y + 18 * S, 22 * S, { font: 'display',
+      color: C.paper });
+    y += 34 * S;
     if (s.event) {
       const e = s.event;
-      const lines = gui.wrap(e.text, b.w - 24 * S, 14 * S, 500);
-      const eh = 40 * S + lines.length * 20 * S + (e.pending ? 52 * S : 0);
-      gui.box(b.x, y, b.w, eh, { r: 14, fill: 'rgba(255,207,90,0.12)', stroke: C.gold + '66' });
-      gui.text(e.title, b.x + 12 * S, y + 26 * S, 16 * S, { color: C.gold, weight: 800 });
-      lines.forEach((l, i) => gui.text(l, b.x + 12 * S, y + 48 * S + i * 20 * S, 14 * S, { weight: 500 }));
+      const text = td('ev', e, 'text').replace('{amt}', euro(e.offer || 0, 0));
+      const lines = gui.wrap(text, b.w - 32 * S, 15 * S, 'body', 600);
+      const eh = 54 * S + lines.length * 21 * S + (e.pending ? 58 * S : 0);
+      gui.card(b.x + 4 * S, y + 10 * S, b.w - 8 * S, eh, { tone: 'paper', label: td('ev', e, 'title'), labelColor: C.red, labelText: C.paper,
+        shadow: 5, tilt: -0.008 });
+      lines.forEach((l, i) => gui.text(l, b.x + 20 * S, y + 50 * S + i * 21 * S, 15 * S, { weight: 600, color: C.ink }));
       if (e.pending) {
-        const bw = (b.w - 34 * S) / 2;
-        gui.button(b.x + 12 * S, y + eh - 48 * S, bw, 38 * S, `Yes (${euro(e.offer, 0)})`, () => { this.sim.acceptOffer(true);
-          this._rebuildWorld(); }, { kind: 'primary', size: 14 * S, id: 'ev-yes' });
-        gui.button(b.x + 22 * S + bw, y + eh - 48 * S, bw, 38 * S, 'No thanks', () => this.sim.acceptOffer(false),
-          { size: 14 * S, id: 'ev-no' });
+        const bw = (b.w - 50 * S) / 2;
+        gui.button(b.x + 20 * S, y + eh - 52 * S, bw, 44 * S, t('ty.yesAmt', { amt: euro(e.offer, 0) }), () => {
+          this.sim.acceptOffer(true);
+          this._rebuildWorld();
+        }, { kind: 'yellow', size: 16 * S, id: 'ev-yes' });
+        gui.button(b.x + 30 * S + bw, y + eh - 52 * S, bw, 44 * S, t('btn.no'), () => this.sim.acceptOffer(false),
+          { size: 16 * S, id: 'ev-no', kind: 'paper' });
       }
-      y += eh + 10 * S;
+      y += eh + 24 * S;
     } else {
-      gui.text('A normal day in Nijmegen.', b.x, y + 14 * S, 14 * S, { color: C.dim });
-      y += 30 * S;
+      gui.text(t('ty.normalDay'), b.x, y + 14 * S, 16 * S, { color: C.dim, weight: 600 });
+      y += 32 * S;
     }
     const r = s.lastReport;
     if (r) {
-      gui.text(`Yesterday: ${r.visitors} visitors · profit ${euro(r.profit, 0)}`, b.x, y + 14 * S, 14 * S,
-        { color: r.profit >= 0 ? C.accent : C.red, weight: 700 });
-      y += 28 * S;
+      gui.text(t('ty.yesterday', { v: r.visitors, p: euro(r.profit, 0) }), b.x, y + 14 * S, 16 * S,
+        { font: 'label', color: r.profit >= 0 ? C.yellow : C.red });
+      y += 30 * S;
     }
-    gui.text('Goals', b.x, y + 16 * S, 14 * S, { color: C.gold, weight: 800 });
-    y += 24 * S;
-    for (const [id, label] of GOAL_LIST) {
-      if (y > b.y + b.h - 18 * S) break;
+    gui.text(t('ty.goals'), b.x, y + 16 * S, 15 * S, { font: 'label', color: C.yellow });
+    y += 26 * S;
+    for (const id of GOAL_LIST) {
+      const label = goalText(id);
+      if (y > b.y + b.h - 16 * S) break;
       const done = !!s.goals[id];
-      gui.text(`${done ? '✓' : '○'}  ${label}`, b.x + 4 * S, y + 14 * S, 14 * S, { color: done ? C.accent : C.text,
-        weight: done ? 800 : 500 });
-      y += 22 * S;
+      gui.ctx.lineWidth = 2 * S;
+      gui.ctx.strokeStyle = C.paper;
+      gui.rr(b.x + 2 * S, y + 1 * S, 16 * S, 16 * S, 3 * S);
+      gui.ctx.stroke();
+      if (done) gui.icon('check', b.x + 10 * S, y + 9 * S, 18 * S, C.yellow);
+      gui.text(label, b.x + 28 * S, y + 15 * S, 15 * S, { color: done ? C.yellow : C.paper, weight: done ? 700 : 500 });
+      y += 24 * S;
     }
   }
 
@@ -256,31 +269,32 @@ export class TycoonScreen extends BaseScreen {
     const s = this.s;
     const max = this.data.rules.maxStockGrams;
     let y = b.y;
-    gui.paragraph(`Dutch law: a coffeeshop may never hold more than ${max} gram. Buy in the morning, and let auto-restock call a delivery when you run low (max 2 a day, €80 each).`,
-      b.x, y - 6 * S, b.w, 13 * S, { color: C.dim });
-    y += 62 * S;
+    gui.paragraph(t('ty.stockLaw', { max, fee: euro(80, 0) }),
+      b.x, y - 6 * S, b.w, 14 * S, { color: C.dim, weight: 600 });
+    y += 64 * S;
     const total = this.sim.stockTotal();
-    gui.bar(b.x, y, b.w, 14 * S, total / max, total > max * 0.9 ? C.gold : C.accent);
-    gui.text(`${Math.round(total)} / ${max} g`, b.x + b.w, y - 6 * S, 12 * S, { align: 'right', color: C.dim, weight: 800 });
-    y += 30 * S;
-    for (const [kind, label, price] of [['weed', 'Wiet', 5.2], ['hash', 'Hasj', 4.8]]) {
-      gui.text(`${label}: ${Math.round(s.stock[kind])} g`, b.x, y + 24 * S, 17 * S, { weight: 800 });
-      gui.text(`inkoop ${euro(price)} / g`, b.x, y + 44 * S, 12 * S, { color: C.dim });
-      const bw = 92 * S;
+    gui.bar(b.x, y, b.w, 18 * S, total / max, total > max * 0.9 ? C.red : C.yellow, 'rgba(245,239,225,0.12)');
+    gui.text(`${Math.round(total)} / ${max} G`, b.x + b.w, y - 8 * S, 15 * S, { font: 'label', color: C.paper, align: 'right' });
+    y += 36 * S;
+    for (const [kind, price] of [['weed', 5.2], ['hash', 4.8]]) {
+      const label = t(`ty.${kind}`);
+      gui.text(label.toUpperCase(), b.x, y + 26 * S, 24 * S, { font: 'display', color: C.paper });
+      gui.text(t('ty.buyPrice', { g: Math.round(s.stock[kind]), p: euro(price) }), b.x, y + 48 * S, 14 * S, { color: C.dim, weight: 600 });
+      const bw = 96 * S;
       [50, 100].forEach((g, i) => {
-        gui.button(b.x + b.w - (2 - i) * (bw + 8 * S) + 8 * S, y + 6 * S, bw, 44 * S, `+${g} g`, () => {
+        gui.button(b.x + b.w - (2 - i) * (bw + 10 * S) + 10 * S, y + 6 * S, bw, 50 * S, `+${g} g`, () => {
           const r = this.sim.buyStock(kind, g);
           if (!r.ok) {
             sfx.error();
-            this.toast(r.reason, C.gold);
+            this.toast(r.reason, C.red);
           } else sfx.coin();
-        }, { size: 14 * S, sub: euro(g * price, 0), id: `buy-${kind}-${g}` });
+        }, { size: 17 * S, sub: euro(g * price, 0), id: `buy-${kind}-${g}`, kind: 'paper' });
       });
-      y += 66 * S;
+      y += 74 * S;
     }
-    gui.button(b.x, y + 4 * S, b.w, 44 * S, `Auto-restock: ${s.policy.restock ? 'ON' : 'OFF'}`, () => {
+    gui.button(b.x, y + 4 * S, b.w, 48 * S, t('ty.autoRestock', { state: t(s.policy.restock ? 'on' : 'off') }), () => {
       s.policy.restock = !s.policy.restock;
-    }, { selected: s.policy.restock, size: 14 * S, id: 'restock' });
+    }, { selected: s.policy.restock, size: 17 * S, id: 'restock', kind: 'ink' });
   }
 
   _tabStaff(gui, b) {
@@ -289,62 +303,68 @@ export class TycoonScreen extends BaseScreen {
     let y = b.y;
     for (const st of this.data.staff) {
       const n = s.staff[st.id];
-      gui.text(`${st.name} × ${n}`, b.x, y + 20 * S, 17 * S, { weight: 800 });
-      gui.text(`${euro(st.wage, 0)} per day each`, b.x, y + 40 * S, 12 * S, { color: C.dim });
-      const bw = 44 * S;
-      gui.button(b.x + b.w - bw * 2 - 8 * S, y + 6 * S, bw, 40 * S, '', () => { this.sim.hire(st.id, -1); this._rebuildWorld(); },
-        { icon: 'minus', id: `st-${st.id}-` });
-      gui.button(b.x + b.w - bw, y + 6 * S, bw, 40 * S, '', () => { this.sim.hire(st.id, 1); this._rebuildWorld(); },
-        { icon: 'plus', id: `st-${st.id}+` });
-      y += 52 * S;
-      y += gui.paragraph(st.desc, b.x, y - 10 * S, b.w - 8 * S, 12 * S, { color: C.dim }) + 2 * S;
+      gui.text(`${td('staff', st).toUpperCase()} ×${n}`, b.x, y + 24 * S, 22 * S, { font: 'display', color: C.paper });
+      gui.text(t('ty.wage', { w: euro(st.wage, 0) }), b.x, y + 44 * S, 13 * S, { color: C.dim, weight: 600 });
+      const bw = 46 * S;
+      gui.button(b.x + b.w - bw * 2 - 10 * S, y + 6 * S, bw, 42 * S, '', () => { this.sim.hire(st.id, -1); this._rebuildWorld(); },
+        { icon: 'minus', id: `st-${st.id}-`, kind: 'paper' });
+      gui.button(b.x + b.w - bw, y + 6 * S, bw, 42 * S, '', () => { this.sim.hire(st.id, 1); this._rebuildWorld(); },
+        { icon: 'plus', id: `st-${st.id}+`, kind: 'yellow' });
+      y += 54 * S;
+      y += gui.paragraph(td('staff', st, 'desc'), b.x, y - 10 * S, b.w - 8 * S, 13 * S, { color: C.dim }) + 6 * S;
     }
     y += 4 * S;
     const strict = s.policy.id === 'strict';
-    gui.button(b.x, y, b.w, 48 * S, strict ? 'ID check: strict' : 'ID check: quick', () => {
+    gui.button(b.x, y, b.w, 54 * S, t(strict ? 'ty.idStrict' : 'ty.idQuick'), () => {
       s.policy.id = strict ? 'quick' : 'strict';
-    }, { size: 14 * S, sub: strict ? 'slower, safe during inspections' : 'faster, but risky if Handhaving visits',
-      color: strict ? '#2b5a3c' : '#6a3a1a', id: 'idpolicy' });
+    }, { size: 18 * S, sub: t(strict ? 'ty.idStrictSub' : 'ty.idQuickSub'),
+      kind: strict ? 'paper' : 'red', id: 'idpolicy' });
   }
 
   _tabUpgrades(gui, b) {
     const S = gui.S;
     const ups = this.data.upgrades;
-    const rowH = 64 * S;
-    const per = Math.max(1, Math.floor((b.h - 50 * S) / (rowH + 6 * S)));
+    const rowH = 66 * S;
+    const per = Math.max(1, Math.floor((b.h - 54 * S) / (rowH + 10 * S)));
     const pages = Math.ceil(ups.length / per);
     this.upPage = clamp(this.upPage, 0, pages - 1);
     let y = b.y;
-    for (const u of ups.slice(this.upPage * per, this.upPage * per + per)) {
+    ups.slice(this.upPage * per, this.upPage * per + per).forEach((u, i) => {
       const owned = this.sim.has(u.id);
       const needs = u.requires && !this.sim.has(u.requires);
-      gui.box(b.x, y, b.w, rowH, { r: 12, fill: owned ? 'rgba(159,224,122,0.10)' : 'rgba(255,255,255,0.04)', stroke: C.line });
-      gui.text(u.name, b.x + 12 * S, y + 22 * S, 15 * S, { weight: 800, color: owned ? C.accent : C.text, max: b.w - 140 * S });
-      gui.text(u.desc, b.x + 12 * S, y + 42 * S, 12 * S, { color: C.dim, max: b.w - 140 * S, weight: 500 });
-      if (owned) gui.text('✓ owned', b.x + b.w - 14 * S, y + rowH / 2 + 5 * S, 14 * S, { align: 'right', color: C.accent, weight: 800 });
+      gui.tilted(b.x + b.w / 2, y + rowH / 2, i % 2 ? 0.006 : -0.006, () => {
+        gui.sticker(b.x, y, b.w, rowH, { fill: owned ? C.yellow : C.paper, r: 8, shadow: 4, outline: 2.5 });
+      });
+      gui.text(td('up', u).toUpperCase(), b.x + 14 * S, y + 24 * S, 18 * S, { font: 'label', color: C.ink, max: b.w - 150 * S });
+      const desc = gui.wrap(td('up', u, 'desc'), b.w - 150 * S, 13 * S, 'body', 600);
+      desc.slice(0, 2).forEach((l, k) => gui.text(l, b.x + 14 * S, y + (desc.length > 1 ? 43 : 48) * S + k * 15 * S, 13 * S,
+        { color: 'rgba(18,16,21,0.72)', max: b.w - 150 * S, weight: 600 }));
+      if (owned) gui.stamp(t('ty.built'), b.x + b.w - 70 * S, y + rowH / 2, 15 * S, C.ink, -0.1, 0.8);
       else {
-        gui.button(b.x + b.w - 116 * S, y + 10 * S, 104 * S, rowH - 20 * S, euro(u.cost, 0), () => {
+        gui.button(b.x + b.w - 124 * S, y + 12 * S, 110 * S, rowH - 24 * S, euro(u.cost, 0), () => {
           const r = this.sim.buyUpgrade(u.id);
           if (r.ok) {
             sfx.fanfare();
-            this.toast(`${u.name} built!`, C.accent);
+            this.toast(t('ty.builtToast', { name: td('up', u) }), C.yellow);
             this._rebuildWorld();
             this.game.persist();
           } else {
             sfx.error();
-            this.toast(r.reason || 'Cannot buy that yet.', C.gold);
+            this.toast(r.reason || t('ty.notYet'), C.red);
           }
-        }, { kind: this.s.cash >= u.cost && !needs ? 'gold' : 'normal', size: 14 * S, disabled: needs, id: `up-${u.id}` });
+        }, { kind: this.s.cash >= u.cost && !needs ? 'red' : 'ink', size: 18 * S, disabled: needs, id: `up-${u.id}`,
+          font: 'display' });
       }
-      y += rowH + 6 * S;
-    }
+      y += rowH + 10 * S;
+    });
     if (pages > 1) {
-      const by = b.y + b.h - 42 * S;
-      gui.button(b.x, by, 100 * S, 38 * S, 'Vorige', () => { this.upPage--; }, { disabled: this.upPage === 0, size: 13 * S,
-        id: 'up-prev' });
-      gui.text(`${this.upPage + 1} / ${pages}`, b.x + b.w / 2, by + 25 * S, 13 * S, { align: 'center', color: C.dim });
-      gui.button(b.x + b.w - 100 * S, by, 100 * S, 38 * S, 'Volgende', () => { this.upPage++; }, {
-        disabled: this.upPage >= pages - 1, size: 13 * S, id: 'up-next' });
+      const by = b.y + b.h - 44 * S;
+      gui.button(b.x, by, 110 * S, 40 * S, t('ty.prev'), () => { this.upPage--; }, { disabled: this.upPage === 0, size: 15 * S,
+        id: 'up-prev', kind: 'ink' });
+      gui.text(`${this.upPage + 1} / ${pages}`, b.x + b.w / 2, by + 27 * S, 16 * S, { align: 'center', font: 'label',
+        color: C.paper });
+      gui.button(b.x + b.w - 110 * S, by, 110 * S, 40 * S, t('ty.next'), () => { this.upPage++; }, {
+        disabled: this.upPage >= pages - 1, size: 15 * S, id: 'up-next', kind: 'ink' });
     }
   }
 
@@ -354,107 +374,129 @@ export class TycoonScreen extends BaseScreen {
     let y = b.y;
     const row = (kind, label, example) => {
       const v = s.prices[kind];
-      gui.text(label, b.x, y + 22 * S, 17 * S, { weight: 800 });
-      gui.text(example(v), b.x, y + 44 * S, 12 * S, { color: C.dim });
-      const bw = 44 * S;
-      gui.button(b.x + b.w - bw * 2 - 70 * S, y + 6 * S, bw, 40 * S, '', () => this.sim.setPrice(kind, v - 0.05),
-        { icon: 'minus', id: `pr-${kind}-` });
-      gui.text(`${Math.round(v * 100)}%`, b.x + b.w - bw - 35 * S, y + 32 * S, 16 * S, { align: 'center', weight: 900,
-        color: v > 1.15 ? C.gold : v < 0.95 ? C.blue : C.accent });
-      gui.button(b.x + b.w - bw, y + 6 * S, bw, 40 * S, '', () => this.sim.setPrice(kind, v + 0.05), { icon: 'plus',
-        id: `pr-${kind}+` });
-      y += 70 * S;
+      gui.text(label.toUpperCase(), b.x, y + 26 * S, 22 * S, { font: 'display', color: C.paper });
+      gui.text(example(v), b.x, y + 48 * S, 14 * S, { color: C.dim, weight: 600 });
+      const bw = 46 * S;
+      gui.button(b.x + b.w - bw * 2 - 80 * S, y + 6 * S, bw, 44 * S, '', () => this.sim.setPrice(kind, v - 0.05),
+        { icon: 'minus', id: `pr-${kind}-`, kind: 'paper' });
+      gui.text(`${Math.round(v * 100)}%`, b.x + b.w - bw - 40 * S, y + 36 * S, 22 * S, { align: 'center', font: 'display',
+        color: v > 1.15 ? C.red : C.yellow });
+      gui.button(b.x + b.w - bw, y + 6 * S, bw, 44 * S, '', () => this.sim.setPrice(kind, v + 0.05), { icon: 'plus',
+        id: `pr-${kind}+`, kind: 'paper' });
+      y += 78 * S;
     };
-    row('cannabis', 'Wiet & hasj', (v) => `Amnesia Haze ${euro(12 * v)} / gram`);
-    row('food', 'Keuken & bar', (v) => `Milkshake ${euro(5.5 * v)} · Tosti ${euro(5 * v)}`);
-    gui.paragraph('Higher prices earn more per sale but fewer people come in and they are less happy. Cheap prices fill the shop but stretch your staff.',
-      b.x, y, b.w, 13 * S, { color: C.dim });
+    row('cannabis', t('ty.priceCannabis'), (v) => t('ty.priceEx1', { p: euro(12 * v) }));
+    row('food', t('ty.priceFood'), (v) => t('ty.priceEx2', { a: euro(5.5 * v), b: euro(5 * v) }));
+    gui.paragraph(t('ty.priceHelp'),
+      b.x, y, b.w, 14 * S, { color: C.dim, weight: 600 });
   }
 
   _drawRun(gui) {
     const S = gui.S;
     const R = this.sim.run;
-    const left = gui.safe.left + 10 * S;
-    const bottom = gui.h - gui.safe.bottom - 10 * S;
-    const w = Math.min(gui.w - 20 * S, 470 * S);
-    const p = panel(gui, left, bottom - 128 * S, w, 128 * S);
-    const stat = (label, value, x, color = C.text) => {
-      gui.text(label, x, p.y + 12 * S, 11 * S, { color: C.dim, weight: 800 });
-      gui.text(String(value), x, p.y + 38 * S, 20 * S, { weight: 900, color });
+    const left = gui.safe.left + 12 * S;
+    const bottom = gui.h - gui.safe.bottom - 12 * S;
+    const w = Math.min(gui.w - 24 * S, 500 * S);
+    const p = gui.card(left, bottom - 150 * S, w, 150 * S, { tone: 'ink', label: t('ty.live'), labelColor: C.red, labelText: C.paper });
+    const stat = (label, value, x, color = C.paper) => {
+      gui.text(label, x, p.y + 12 * S, 13 * S, { font: 'label', color: C.dim });
+      gui.text(String(value), x, p.y + 40 * S, 24 * S, { font: 'display', color });
     };
     const cw = p.w / 4;
-    stat('BEZOEKERS', R?.visitors ?? 0, p.x);
-    stat('GEHOLPEN', R?.served ?? 0, p.x + cw, C.accent);
-    stat('GEMIST', (R?.lost ?? 0) + (R?.soldOut ?? 0), p.x + cw * 2, (R?.lost || R?.soldOut) ? C.red : C.dim);
-    stat('OMZET', euro((R?.revCannabis ?? 0) + (R?.revFood ?? 0), 0), p.x + cw * 3, C.gold);
-    const by = p.y + 52 * S;
-    const bw = (p.w - 18 * S) / 4;
+    stat(t('ty.visitors'), R?.visitors ?? 0, p.x);
+    stat(t('ty.served'), R?.served ?? 0, p.x + cw, C.yellow);
+    stat(t('ty.missed'), (R?.lost ?? 0) + (R?.soldOut ?? 0), p.x + cw * 2, (R?.lost || R?.soldOut) ? C.red : C.paper);
+    stat(t('ty.revenue'), euro((R?.revCannabis ?? 0) + (R?.revFood ?? 0), 0), p.x + cw * 3, C.yellow);
+    const by = p.y + 58 * S;
+    const bw = (p.w - 24 * S) / 4;
     [1, 2, 4].forEach((sp, i) => {
-      gui.button(p.x + i * (bw + 6 * S), by, bw, 44 * S, `${sp}×`, () => { this.speed = sp; }, { selected: this.speed === sp,
-        size: 15 * S, id: `sp-${sp}` });
+      gui.button(p.x + i * (bw + 8 * S), by, bw, 48 * S, `${sp}×`, () => { this.speed = sp; }, { selected: this.speed === sp,
+        size: 19 * S, id: `sp-${sp}`, kind: 'paper', font: 'display' });
     });
-    gui.button(p.x + 3 * (bw + 6 * S), by, bw, 44 * S, 'Skip', () => {
+    gui.button(p.x + 3 * (bw + 8 * S), by, bw, 48 * S, t('ty.skip'), () => {
       while (this.s.phase === 'run') this.sim.simulateHour();
       this.crowd.setRate(0);
       this.game.persist();
-    }, { size: 15 * S, kind: 'ghost', id: 'skip' });
+    }, { size: 18 * S, kind: 'ink', id: 'skip' });
   }
 
   _drawReport(gui) {
     const S = gui.S;
     const r = this.s.lastReport;
     if (!r) return;
-    const w = Math.min(gui.w - 24 * S, 480 * S);
-    const h = Math.min(gui.h - gui.safe.top - 80 * S, 560 * S);
+    // Size the receipt to its content; on short screens drop the logo and tighten the lines.
+    const nRows = 9 + (r.restock ? 1 : 0) + (r.fines ? 1 : 0);
+    const goals = (this.newGoals || []).slice(0, 3);
+    const avail = (gui.h - gui.safe.top - gui.safe.bottom - 88 * S) / S;
+    const body = (rh) => 20 + nRows * rh + 14 + rh + 32 + goals.length * 30 + 106;
+    const compact = 146 + body(21) > avail;
+    const head = compact ? 84 : 146;
+    const rh = clamp((avail - head - body(0)) / (nRows + 1), 16, 21);
+    const h = Math.min(avail, head + body(rh)) * S;
+    const w = Math.min(gui.w - 28 * S, 440 * S);
     const x = (gui.w - w) / 2;
-    const y = gui.safe.top + 64 * S + Math.max(0, (gui.h - gui.safe.top - 80 * S - h) / 2);
-    const p = panel(gui, x, y, w, h);
-    gui.text(`Dag ${r.day} afgesloten`, p.x, p.y + 24 * S, 24 * S, { family: SERIF, color: C.gold, weight: 700 });
-    if (r.event) gui.text(r.event, p.x + p.w, p.y + 22 * S, 13 * S, { align: 'right', color: C.dim, max: p.w * 0.45 });
-    let ly = p.y + 54 * S;
-    const line = (label, value, color = C.text, bold = false) => {
-      gui.text(label, p.x, ly, 14 * S, { color: bold ? C.text : C.dim, weight: bold ? 800 : 600 });
-      gui.text(value, p.x + p.w, ly, 14 * S, { align: 'right', color, weight: bold ? 900 : 700 });
-      ly += 23 * S;
+    const y = gui.safe.top + 76 * S + Math.max(0, (avail * S - h) / 2);
+    receipt(gui, x, y, w, h);
+    const ix = x + 22 * S;
+    const iw = w - 44 * S;
+    if (!compact) gui.image(gui.logo, x + w / 2 - 28 * S, y + 12 * S, 56 * S, 56 * S);
+    const hy = y + (compact ? -60 : 0) * S;
+    gui.text('KRONKEL', x + w / 2, hy + 90 * S, 22 * S, { font: 'display', color: C.ink, align: 'center' });
+    gui.text('VLAAMSEGAS · NIJMEGEN', x + w / 2, hy + 108 * S, 12 * S, { font: RECEIPT, color: C.ink, align: 'center' });
+    gui.text(t('rep.title', { d: r.day }), x + w / 2, hy + 130 * S, 16 * S, { font: RECEIPT, weight: 700, color: C.ink,
+      align: 'center' });
+    let ly = y + head * S;
+    dashes(gui, ix, ly, iw);
+    ly += 20 * S;
+    const size = rh < 19 ? 13.5 : 15;
+    const L = (a, b, opts = {}) => {
+      rline(gui, ix, ly, iw, a, b, { size, ...opts });
+      ly += rh * S;
     };
-    line('Visitors', `${r.visitors}`);
-    line('Helped at the counter', `${r.served}`, C.accent);
-    line('Gave up (queue / sold out)', `${r.lost} / ${r.soldOut}`, r.lost + r.soldOut ? C.red : C.dim);
-    line('Sat down', `${r.seated}`);
+    L(t('rep.visitors'), `${r.visitors}`);
+    L(t('rep.served'), `${r.served}`);
+    L(t('rep.lost'), `${r.lost}/${r.soldOut}`, { color: r.lost + r.soldOut ? C.red : C.ink });
+    L(t('rep.seated'), `${r.seated}`);
+    dashes(gui, ix, ly - 8 * S, iw);
     ly += 6 * S;
-    line('Wiet & hasj', euro(r.revCannabis, 0), C.accent);
-    line('Bar & keuken', euro(r.revFood, 0), C.accent);
-    line('Wages', `-${euro(r.wages, 0)}`, C.red);
-    line('Rent', `-${euro(r.rent, 0)}`, C.red);
-    line('Food & drinks cost', `-${euro(r.foodCost, 0)}`, C.red);
-    if (r.restock) line('Deliveries', `-${euro(r.restock, 0)}`, C.red);
-    if (r.fines) line('Fines', `-${euro(r.fines, 0)}`, C.red);
-    ly += 4 * S;
-    line('Profit', euro(r.profit, 0), r.profit >= 0 ? C.gold : C.red, true);
-    ly += 6 * S;
-    gui.text(`Happiness ${Math.round(r.satisfaction * 100)}%`, p.x, ly, 14 * S, { weight: 700 });
-    gui.stars(p.x + p.w - 7 * S * 2.3 * 5 - 6 * S, ly - 5 * S, 7 * S, r.repAfter);
+    L(t('rep.cannabis'), euro(r.revCannabis));
+    L(t('rep.food'), euro(r.revFood));
+    L(t('rep.wages'), `-${euro(r.wages)}`);
+    L(t('rep.rent'), `-${euro(r.rent)}`);
+    L(t('rep.foodCost'), `-${euro(r.foodCost)}`);
+    if (r.restock) L(t('rep.deliveries'), `-${euro(r.restock)}`);
+    if (r.fines) L(t('rep.fines'), `-${euro(r.fines)}`, { color: C.red });
+    dashes(gui, ix, ly - 8 * S, iw);
     ly += 8 * S;
+    L(t('rep.profit'), euro(r.profit), { size: 20, bold: true, color: r.profit >= 0 ? C.ink : C.red });
+    ly += 8 * S;
+    gui.text(t('rep.happy', { p: Math.round(r.satisfaction * 100) }), ix, ly, 15 * S, { font: RECEIPT, weight: 700, color: C.ink,
+      max: iw - 190 * S });
     const delta = r.repAfter - r.repBefore;
-    gui.text(`${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)} stars`, p.x + p.w, ly + 14 * S, 12 * S,
-      { align: 'right', color: delta >= 0 ? C.accent : C.red, weight: 800 });
-    ly += 30 * S;
-    for (const goal of this.newGoals || []) {
-      if (ly > y + h - 90 * S) break;
-      gui.text(`★ Goal reached: ${goal}`, p.x, ly, 14 * S, { color: C.gold, weight: 800, max: p.w });
-      ly += 22 * S;
+    gui.text(`${delta >= 0 ? '+' : '-'}${Math.abs(delta).toFixed(2)}`, ix + iw - 140 * S, ly, 13 * S, { font: RECEIPT,
+      color: delta >= 0 ? C.ink : C.red, align: 'right' });
+    gui.ctx.fillStyle = C.ink;
+    gui.rr(ix + iw - 132 * S, ly - 18 * S, 132 * S, 26 * S, 13 * S);
+    gui.ctx.fill();
+    gui.smileys(ix + iw - 128 * S, ly - 5 * S, 11 * S, r.repAfter);
+    ly += 24 * S;
+    for (const goal of goals) {
+      gui.tape(t('rep.goal', { g: goal }), x + w / 2, ly + 14 * S, { size: 14 * S, color: C.yellow, tilt: -0.02 });
+      ly += 30 * S;
     }
-    gui.button(p.x, y + h - 70 * S, p.w, 54 * S, 'Volgende dag', () => this.nextDay(), { kind: 'primary', icon: 'play',
-      size: 18 * S, id: 'next' });
+    gui.text(t('rep.thanks'), x + w / 2, y + h - 88 * S, 13 * S, { font: RECEIPT, weight: 700, color: C.ink,
+      align: 'center' });
+    gui.button(ix, y + h - 76 * S, iw, 56 * S, t('rep.next'), () => this.nextDay(), { kind: 'yellow', icon: 'play',
+      size: 22 * S, id: 'next' });
   }
 
   _drawBankrupt(gui) {
     if (this.modal) return;
     this.modal = {
-      title: 'Failliet!', color: C.red,
-      text: 'The bank pulled the plug: your Kronkel ran out of money. Every coffeeshop legend has a rough start. Try again?',
-      buttons: [{ label: 'Menu', onClick: () => this.game.setScreen('title') },
-        { label: 'Start over', kind: 'primary', onClick: () => {
+      title: t('bankrupt.title'), color: C.red,
+      text: t('bankrupt.text'),
+      buttons: [{ label: t('btn.menu'), onClick: () => this.game.setScreen('title') },
+        { label: t('bankrupt.again'), kind: 'yellow', onClick: () => {
           this.game.save.tycoon = null;
           this.game.persist();
           this.game.setScreen('tycoon');

@@ -1,6 +1,47 @@
-// Shared screen plumbing: base class, top bar, panels, modals and the pause menu.
-import { C, SERIF } from '../gui.js';
+// Shared screen plumbing in the Kronkel style: base class, HUD with the smiley mascot, cards,
+// modals, the pause menu, receipts and the ID-card portrait.
+import { C } from '../gui.js';
 import { sfx } from '../audio.js';
+import { t, LANGS, getLang } from '../i18n.js';
+
+/** The logo smiley as a living HUD mascot: hops on good moments, shakes on bad ones. */
+export class Mascot {
+  constructor() {
+    this.t = 0;
+    this.kind = null;
+    this.k = 0;
+  }
+
+  react(kind) {
+    this.kind = kind;
+    this.k = 1;
+  }
+
+  update(dt) {
+    this.t += dt;
+    this.k = Math.max(0, this.k - dt * 1.4);
+  }
+
+  draw(gui, x, y, size) {
+    const S = gui.S;
+    let dx = 0;
+    let dy = Math.sin(this.t * 2.1) * 2 * S;
+    let rot = Math.sin(this.t * 1.4) * 0.05;
+    const k = this.k;
+    if (this.kind === 'good' && k > 0) {
+      dy -= Math.sin(k * Math.PI) * 16 * S;
+      rot += Math.sin(k * Math.PI) * 0.35;
+    } else if (this.kind === 'bad' && k > 0) {
+      dx = Math.sin(this.t * 55) * 7 * S * k;
+      rot -= 0.25 * k;
+    }
+    gui.image(gui.logo, x + dx, y + dy, size, size, rot);
+    if (this.kind === 'bad' && k > 0.2) {
+      gui.text('!', x + size * 0.92 + dx, y + size * 0.3 + dy, size * 0.5, { font: 'display', color: C.red, align: 'center',
+        stroke: C.ink, strokeW: 5 * S });
+    }
+  }
+}
 
 export class BaseScreen {
   constructor(game, params = {}) {
@@ -8,6 +49,7 @@ export class BaseScreen {
     this.params = params;
     this.paused = false;
     this.modal = null;
+    this.mascot = new Mascot();
   }
 
   get world() {
@@ -22,9 +64,12 @@ export class BaseScreen {
     return this.game.layout;
   }
 
-  toast(text, color = C.text) {
+  /** color: C.yellow good, C.red bad, anything else = info */
+  toast(text, color = C.paper) {
     this.game.gui.toast(text, color);
     if (this.game.xr?.active) this.game.xr.gui.toast(text, color);
+    if (color === C.yellow) this.mascot.react('good');
+    if (color === C.red) this.mascot.react('bad');
   }
 
   onBack() {
@@ -52,7 +97,6 @@ export class BaseScreen {
     this.overlay.enter();
   }
 
-  /** Default pause handling for gameplay screens. */
   onPause() {
     if (!this.pausable) return;
     this.paused = !this.paused;
@@ -62,30 +106,32 @@ export class BaseScreen {
   drawPause(gui) {
     if (!this.paused) return;
     const S = gui.S;
+    gui.blocker();
     if (this.overlay) {
-      gui.blocker();
       this.overlay.draw(gui);
       return;
     }
-    gui.blocker();
-    gui.box(0, 0, gui.w, gui.h, { r: 0, fill: 'rgba(5,10,7,0.6)', stroke: null });
-    const w = Math.min(gui.w - 32, 360 * S);
-    const h = 330 * S;
+    gui.dim(0.65);
+    const w = Math.min(gui.w - 32 * S, 380 * S);
+    const h = 318 * S;
     const x = (gui.w - w) / 2;
-    const y = (gui.h - h) / 2;
-    gui.box(x, y, w, h, { r: 22, fill: C.panel2, shadow: true });
-    gui.text('Pauze', gui.w / 2, y + 52 * S, 32 * S, { align: 'center', family: SERIF, color: C.gold, weight: 700 });
+    const y = (gui.h - h) / 2 + 10 * S;
+    gui.card(x, y, w, h, { tone: 'ink' });
+    gui.tiles(t('pause.title'), gui.w / 2, y - 24 * S, 46 * S, { align: 'center', tilt: -0.03 });
+    gui.text(t('pause.sub'), gui.w / 2, y + 58 * S, 15 * S, { color: C.dim, align: 'center',
+      weight: 600, max: w - 30 * S });
     const bw = w - 48 * S;
-    const bh = 50 * S;
-    let by = y + 80 * S;
-    gui.button(x + 24 * S, by, bw, bh, 'Resume', () => { this.paused = false; }, { kind: 'primary', icon: 'play' });
-    by += bh + 12 * S;
-    gui.button(x + 24 * S, by, bw, bh, 'How to play', () => this.openHowto(this.howtoTab), {});
-    by += bh + 12 * S;
-    gui.button(x + 24 * S, by, bw, bh, 'Quit to menu', () => {
+    const bh = 56 * S;
+    let by = y + 86 * S;
+    gui.button(x + 24 * S, by, bw, bh, t('pause.resume'), () => { this.paused = false; }, { kind: 'yellow', icon: 'play',
+      size: 20 * S });
+    by += bh + 16 * S;
+    gui.button(x + 24 * S, by, bw, bh, t('btn.howto'), () => this.openHowto(this.howtoTab), { icon: 'book', size: 20 * S });
+    by += bh + 16 * S;
+    gui.button(x + 24 * S, by, bw, bh, t('pause.quit'), () => {
       this.onQuit?.();
       this.game.setScreen('title');
-    }, { kind: 'danger', icon: 'back' });
+    }, { kind: 'red', icon: 'back', size: 20 * S });
   }
 
   drawModal(gui) {
@@ -93,74 +139,98 @@ export class BaseScreen {
     if (!m) return;
     const S = gui.S;
     gui.blocker();
-    gui.box(0, 0, gui.w, gui.h, { r: 0, fill: 'rgba(5,10,7,0.6)', stroke: null });
-    const w = Math.min(gui.w - 32, (m.width || 460) * S);
-    const lines = gui.wrap(m.text || '', w - 48 * S, 15 * S, 500);
-    const h = (110 + (m.buttons?.length > 2 ? 120 : 60)) * S + lines.length * 15 * S * 1.45 + (m.extraH || 0) * S;
+    gui.dim(0.6);
+    const w = Math.min(gui.w - 32 * S, (m.width || 470) * S);
+    const lines = gui.wrap(m.text || '', w - 48 * S, 16 * S);
+    const h = 150 * S + lines.length * 16 * S * 1.38;
     const x = (gui.w - w) / 2;
     const y = Math.max(16, (gui.h - h) / 2);
-    gui.box(x, y, w, h, { r: 22, fill: C.panel2, shadow: true, stroke: (m.color || C.gold) + '55' });
-    gui.text(m.title, x + 24 * S, y + 44 * S, 24 * S, { color: m.color || C.gold, weight: 800, max: w - 48 * S });
-    gui.paragraph(m.text || '', x + 24 * S, y + 58 * S, w - 48 * S, 15 * S, { color: C.text });
-    const btns = m.buttons || [{ label: 'OK', kind: 'primary', onClick: () => { this.modal = null; } }];
-    const bh = 48 * S;
-    const by = y + h - bh - 20 * S;
-    const gap = 10 * S;
+    gui.card(x, y, w, h, { tone: 'paper', label: m.title, labelColor: m.color === C.red ? C.red : C.ink, labelText: C.paper });
+    gui.paragraph(m.text || '', x + 24 * S, y + 30 * S, w - 48 * S, 16 * S, { color: C.ink });
+    const btns = m.buttons || [{ label: t('btn.ok'), kind: 'yellow' }];
+    const bh = 52 * S;
+    const by = y + h - bh - 22 * S;
+    const gap = 12 * S;
     const bw = (w - 48 * S - gap * (btns.length - 1)) / btns.length;
     btns.forEach((b, i) => {
       gui.button(x + 24 * S + i * (bw + gap), by, bw, bh, b.label, () => {
         this.modal = null;
         b.onClick?.();
-      }, { kind: b.kind || 'normal', size: 15 * S });
+      }, { kind: b.kind || 'paper', size: 17 * S });
     });
   }
 }
 
-/** Pill-shaped info bar along the top. items: [{label, value, color, w}] */
-export function topBar(gui, items, { right = null } = {}) {
+/**
+ * The in-game HUD: smiley mascot on the left, stats as tilted paper stickers, pause button on the right.
+ * items: [{label, value, color, w, draw}] — color tints the value (C.red for trouble).
+ */
+export function hud(gui, screen, items, { onPause = null } = {}) {
   const S = gui.S;
   const y = gui.safe.top + 10 * S;
-  const h = 44 * S;
+  const h = 50 * S;
   let x = gui.safe.left + 10 * S;
-  const maxRight = gui.w - gui.safe.right - 10 * S - (right ? right.w + 8 * S : 0);
-  for (const it of items) {
-    const w = it.w ? it.w * S : Math.max(70 * S, gui.measure(String(it.value), 17 * S, 800) + 28 * S);
-    if (x + w > maxRight) break;
-    gui.box(x, y, w, h, { r: h / 2, fill: 'rgba(10,20,14,0.82)', stroke: C.line });
-    if (it.draw) it.draw(x, y, w, h);
-    else {
-      gui.text(it.label, x + w / 2, y + 15 * S, 10 * S, { align: 'center', color: C.dim, weight: 700 });
-      gui.text(String(it.value), x + w / 2, y + 34 * S, 17 * S, { align: 'center', color: it.color || C.text, weight: 800,
-        max: w - 12 });
-    }
-    x += w + 6 * S;
-  }
-  if (right) {
-    gui.button(gui.w - gui.safe.right - 10 * S - right.w, y, right.w, h, right.label, right.onClick,
-      { icon: right.icon, kind: 'ghost', size: 15 * S, id: 'topbar-right' });
+  const ms = 54 * S;
+  screen.mascot.draw(gui, x - 2 * S, y - 3 * S, ms);
+  x += ms + 6 * S;
+  const right = gui.w - gui.safe.right - 10 * S - (onPause ? h + 10 * S : 0);
+  items.forEach((it, i) => {
+    const w = it.w ? it.w * S : Math.max(66 * S, gui.measure(String(it.value), 20 * S, 'display') + 26 * S);
+    if (x + w > right) return;
+    const tilt = i % 2 ? 0.025 : -0.02;
+    gui.tilted(x + w / 2, y + h / 2, tilt, () => {
+      gui.sticker(x, y, w, h, { fill: it.fill || C.paper, r: 7, shadow: 4, outline: 2.5 });
+      if (it.draw) it.draw(x, y, w, h);
+      else {
+        gui.text(it.label, x + w / 2, y + 15 * S, 11.5 * S, { font: 'label', color: C.red, align: 'center', upper: true });
+        const vc = it.color === C.red ? C.red : C.ink;
+        gui.text(String(it.value), x + w / 2, y + 40 * S, 20 * S, { font: 'display', color: vc, align: 'center',
+          max: w - 10 * S });
+      }
+    });
+    x += w + 8 * S;
+  });
+  if (onPause) {
+    gui.button(gui.w - gui.safe.right - 10 * S - h, y, h, h, '', onPause, { kind: 'ink', icon: 'pause', size: 20 * S,
+      id: 'hud-pause' });
   }
   return y + h;
 }
 
+/** Card with a tape label; returns the inner content rect. */
 export function panel(gui, x, y, w, h, title = null, opts = {}) {
-  const S = gui.S;
-  gui.box(x, y, w, h, { r: 18, fill: opts.fill || C.panel, shadow: true, stroke: opts.stroke || C.line });
-  if (title) gui.text(title, x + 16 * S, y + 28 * S, 15 * S, { color: opts.titleColor || C.gold, weight: 800 });
-  return { x: x + 14 * S, y: y + (title ? 40 : 14) * S, w: w - 28 * S, h: h - (title ? 54 : 28) * S };
+  return gui.card(x, y, w, h, { tone: opts.tone || 'ink', label: title, labelColor: opts.labelColor || C.yellow,
+    labelText: opts.labelText || C.ink });
 }
 
 export function vrButton(game, gui, x, y, w, h) {
   if (!game.xrSupported) return;
   if (game.xr.active) {
-    gui.button(x, y, w, h, 'Exit VR', () => game.xr.exit(), { icon: 'vr', kind: 'ghost' });
+    gui.button(x, y, w, h, t('vr.exit'), () => game.xr.exit(), { icon: 'vr', kind: 'ink' });
   } else {
-    gui.button(x, y, w, h, 'Play in VR', () => {
-      game.xr.enter().catch((e) => game.gui.toast(`VR failed: ${e.message}`, C.red));
-    }, { icon: 'vr', kind: 'gold' });
+    gui.button(x, y, w, h, t('vr.enter'), () => {
+      game.xr.enter().catch((e) => game.gui.toast(t('vr.failed', { msg: e.message }), C.red));
+    }, { icon: 'vr', kind: 'ink', textColor: C.yellow });
   }
 }
 
-/** Draw a little ID-card portrait from a look. */
+/** NL / EN / DE sticker chips, right-aligned at `right`. Returns the left edge. */
+export function langChips(gui, game, right, y, { size = 40, tilt = 0.02 } = {}) {
+  const S = gui.S;
+  const w = size * 1.25 * S;
+  const h = size * S;
+  const gap = 6 * S;
+  let x = right - LANGS.length * w - (LANGS.length - 1) * gap;
+  const left = x;
+  for (const l of LANGS) {
+    gui.button(x, y, w, h, l.short, () => game.setLang(l.id), { kind: 'ink', selected: getLang() === l.id,
+      size: size * 0.42 * S, id: `lang-${l.id}`, tilt, font: 'display' });
+    x += w + gap;
+  }
+  return left;
+}
+
+/** Little ID-card portrait from a look. */
 export function portrait(gui, x, y, w, h, look) {
   const c = gui.ctx;
   c.save();
@@ -171,18 +241,15 @@ export function portrait(gui, x, y, w, h, look) {
   const cx = x + w / 2;
   const headR = w * 0.24;
   const hy = y + h * 0.42;
-  // shoulders
   c.fillStyle = look.shirt;
   c.beginPath();
   c.ellipse(cx, y + h * 1.02, w * 0.46, h * 0.32, 0, 0, Math.PI * 2);
   c.fill();
-  // neck + head
   c.fillStyle = look.skin;
   c.fillRect(cx - headR * 0.35, hy + headR * 0.6, headR * 0.7, headR * 0.7);
   c.beginPath();
   c.ellipse(cx, hy, headR, headR * 1.1, 0, 0, Math.PI * 2);
   c.fill();
-  // hair styles
   c.fillStyle = look.style === 'hat_beanie' || look.style === 'hat_cap' ? look.hat : look.hair;
   const s = look.style;
   if (s === 'hair_long') {
@@ -220,7 +287,6 @@ export function portrait(gui, x, y, w, h, look) {
     c.ellipse(cx, hy - headR * 0.25, headR * 1.05, headR * 0.85, 0, Math.PI, 0);
     c.fill();
   }
-  // face
   c.fillStyle = '#151515';
   c.beginPath();
   c.arc(cx - headR * 0.36, hy + headR * 0.05, headR * 0.1, 0, Math.PI * 2);
@@ -245,6 +311,50 @@ export function portrait(gui, x, y, w, h, look) {
   c.restore();
 }
 
-export function fmtPct(v) {
-  return `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
+/** Thermal-paper receipt (kassabon / dagafsluiting) with a torn zig-zag bottom edge. */
+export function receipt(gui, x, y, w, h, { tilt = 0.012 } = {}) {
+  const S = gui.S;
+  const c = gui.ctx;
+  gui.tilted(x + w / 2, y + h / 2, tilt, () => {
+    const path = (ox, oy) => {
+      c.beginPath();
+      c.moveTo(x + ox, y + oy);
+      c.lineTo(x + w + ox, y + oy);
+      const n = Math.max(8, Math.round(w / (14 * S)));
+      for (let i = 0; i <= n; i++) c.lineTo(x + w + ox - (w * i) / n, y + h + oy - (i % 2 ? 9 * S : 0));
+      c.closePath();
+    };
+    path(6 * S, 6 * S);
+    c.fillStyle = C.ink;
+    c.fill();
+    path(0, 0);
+    c.fillStyle = '#fbf8f0';
+    c.fill();
+    c.lineWidth = 2.5 * S;
+    c.strokeStyle = C.ink;
+    c.stroke();
+  });
 }
+
+/** Dashed rule line for receipts. */
+export function dashes(gui, x, y, w, color = 'rgba(18,16,21,0.45)') {
+  const c = gui.ctx;
+  c.save();
+  c.setLineDash([5 * gui.S, 4 * gui.S]);
+  c.strokeStyle = color;
+  c.lineWidth = 1.5 * gui.S;
+  c.beginPath();
+  c.moveTo(x, y);
+  c.lineTo(x + w, y);
+  c.stroke();
+  c.restore();
+}
+
+/** Receipt line: label left, value right, in the receipt typewriter style. */
+export function rline(gui, x, y, w, label, value, { size = 15, bold = false, color = C.ink } = {}) {
+  const S = gui.S;
+  gui.text(label, x, y, size * S, { font: RECEIPT, weight: bold ? 700 : 400, color, max: w * 0.66 });
+  gui.text(value, x + w, y, size * S, { font: RECEIPT, weight: bold ? 700 : 400, color, align: 'right' });
+}
+
+export const RECEIPT = '"Courier New", Courier, monospace';

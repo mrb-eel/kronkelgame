@@ -1,4 +1,5 @@
 // Small shared helpers. Nothing here touches the DOM or three.js so the sims can run in Node tests.
+import { getLang } from './i18n.js';
 
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -30,13 +31,13 @@ export function rng(seed = Date.now()) {
   return next;
 }
 
-// Dutch money formatting: €12,50
+// Money in the player's language: €1.234,50 (nl, de) or €1,234.50 (en).
 export function euro(n, decimals = 2) {
   const neg = n < 0;
-  const s = Math.abs(n).toFixed(decimals).replace('.', ',');
-  const [i, d] = s.split(',');
-  const withDots = i.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${neg ? '-' : ''}€${withDots}${d !== undefined ? ',' + d : ''}`;
+  const en = getLang() === 'en';
+  const [i, d] = Math.abs(n).toFixed(decimals).split('.');
+  const grouped = i.replace(/\B(?=(\d{3})+(?!\d))/g, en ? ',' : '.');
+  return `${neg ? '-' : ''}€${grouped}${d !== undefined ? (en ? '.' : ',') + d : ''}`;
 }
 
 // Game clock: hours as a float, 25.5 = 01:30 the next night.
@@ -46,8 +47,10 @@ export function clockText(h) {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
+/** 24-07-2026 (nl), 24.07.2026 (de), 24/07/2026 (en). */
 export function dateText(d) {
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+  const sep = { nl: '-', de: '.', en: '/' }[getLang()] || '-';
+  return [String(d.getDate()).padStart(2, '0'), String(d.getMonth() + 1).padStart(2, '0'), d.getFullYear()].join(sep);
 }
 
 export function ageOn(birth, today) {

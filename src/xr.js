@@ -16,6 +16,7 @@ export class XR {
     const canvas = document.createElement('canvas');
     this.gui = new Gui(canvas, { fixed: { w: PANEL_W, h: PANEL_H }, dprCap: 1 });
     this.gui.navMode = false;
+    this.gui.logo = game.logo;
     this.gui.onClickSound = () => sfx.click();
     this.tex = new THREE.CanvasTexture(canvas);
     this.tex.colorSpace = THREE.SRGBColorSpace;

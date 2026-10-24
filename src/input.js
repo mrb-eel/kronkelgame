@@ -1,6 +1,8 @@
 // Touch / mouse / keyboard / gamepad -> GUI focus navigation + screen callbacks.
 // Screens may implement: onBack(), onTab(dir), onAlt(button), onPause(), onLook(x, y, dt), onZoom(delta), onKey(key)
 import { unlock } from './audio.js';
+import { C } from './gui.js';
+import { t } from './i18n.js';
 
 const REPEAT_DELAY = 0.38;
 const REPEAT_RATE = 0.12;
@@ -113,10 +115,10 @@ export class Input {
     });
 
     window.addEventListener('gamepadconnected', (e) => {
-      this.game.gui.toast(`Controller connected: ${shortPadName(e.gamepad.id)}`, '#9fe07a');
+      this.game.gui.toast(t('pad.on', { name: shortPadName(e.gamepad.id) }), C.yellow);
       this.lastDevice = 'gamepad';
     });
-    window.addEventListener('gamepaddisconnected', () => this.game.gui.toast('Controller disconnected', '#ffcf5a'));
+    window.addEventListener('gamepaddisconnected', () => this.game.gui.toast(t('pad.off'), C.paper));
   }
 
   _spread() {

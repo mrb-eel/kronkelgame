@@ -1,7 +1,8 @@
 // Kassa mode: you're behind the counter. Check IDs, enforce the 5 gram rule, ring up orders,
 // take PIN or count out change. Pure logic: the screen renders it, tests drive it directly.
-import { ageOn, clamp, randomLook, rng as makeRng, round2, HAIR_STYLES } from '../util.js';
+import { ageOn, clamp, euro, randomLook, rng as makeRng, round2, HAIR_STYLES } from '../util.js';
 import { Nav, stepAlong } from './nav.js';
+import { t as tr, tl, td } from '../i18n.js';
 
 export const NOTES = [100, 50, 20, 10, 5];
 export const CHANGE_UNITS = [50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1];
@@ -34,9 +35,10 @@ export class CashierSim {
   _products() {
     const has = (u) => !u || !this.upgrades || this.upgrades.has(u);
     const all = {};
-    for (const p of this.data.weed.filter((p) => has(p.unlock))) all[p.id] = { ...p, cat: 'weed', unit: 'g' };
-    for (const p of this.data.hash.filter((p) => has(p.unlock))) all[p.id] = { ...p, cat: 'hash', unit: 'g' };
-    for (const p of this.data.extras) all[p.id] = { ...p, cat: 'extra', unit: 'st' };
+    const add = (p, cat, unit) => { all[p.id] = { ...p, name: td('item', p), cat, unit }; };
+    for (const p of this.data.weed.filter((p) => has(p.unlock))) add(p, 'weed', 'g');
+    for (const p of this.data.hash.filter((p) => has(p.unlock))) add(p, 'hash', 'g');
+    for (const p of this.data.extras) add(p, 'extra', 'st');
     return all;
   }
 
@@ -139,7 +141,7 @@ export class CashierSim {
       phase: 'enter', step: null, slot: -1,
       patience: 34 + r.range(0, 12) - diff * 8, maxPatience: 0, queuePatience: 95 + r.range(0, 30),
       bag: {}, change: 0, cashGiven: 0, payTimer: 0, said: null, saidT: 0, mood: 1,
-      greeting: r.pick(this.data.lines.greet), anim: 'Walk',
+      greeting: r.pick(tl('line.greet')), anim: 'Walk',
     };
   }
 
@@ -165,11 +167,10 @@ export class CashierSim {
     const lines = this.wantLines(c);
     const parts = lines.map((l) => {
       const p = this.products[l.id];
-      return p.unit === 'g' ? `${l.qty} gram ${p.name}` : `${l.qty}× ${p.name}`;
+      const key = p.unit === 'g' ? (l.qty === 1 ? 'order.gram1' : 'order.gram') : 'order.piece';
+      return tr(key, { n: l.qty, name: p.name });
     });
-    let s = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
-    if (c.alcohol && !c.saidNoAlcohol) s += ` ${this.rng.pick(this.data.lines.alcohol)}`;
-    return s;
+    return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} ${tr('order.and')} ${parts[parts.length - 1]}` : parts[0];
   }
 
   isValidId(c) {
@@ -185,24 +186,22 @@ export class CashierSim {
     const valid = this.isValidId(c);
     if (accept) {
       if (!valid) {
-        this._strike(c.kind === 'minor' ? 'Sold to a minor!' : c.kind === 'expired' ? 'Expired ID accepted!' :
-          'Fake ID accepted!');
+        this._strike(tr(c.kind === 'minor' ? 'strike.minor' : c.kind === 'expired' ? 'strike.expired' : 'strike.fake'));
       } else {
         this.emit('ok');
       }
       c.step = 'order';
-      this.say(c, `${c.greeting} ${this.orderText(c)}`);
+      const beer = c.alcohol && !c.saidNoAlcohol ? ` ${this.rng.pick(tl('line.alcohol'))}` : tr('order.askEnd');
+      this.say(c, tr('order.ask', { greet: c.greeting, order: this.orderText(c), end: beer }));
     } else if (valid) {
       this.stats.wrongRefusals++;
-      this.say(c, c.kind === 'birthday' ? "It's literally my 18th birthday today!" : 'What? My ID is fine!');
-      this.emit('wrongRefusal', { text: c.kind === 'birthday' ? 'They turned 18 today, that was valid.' :
-        'That ID was valid.' });
+      this.say(c, tr(c.kind === 'birthday' ? 'say.birthday' : 'say.idFine'));
+      this.emit('wrongRefusal', { text: tr(c.kind === 'birthday' ? 'msg.wasBirthday' : 'msg.wasValid') });
       this._leave(c, true);
     } else {
       this.stats.refusedOk++;
-      const why = { minor: 'Under 18.', expired: 'ID is expired.', fake: "Photo doesn't match." }[c.kind];
-      this.say(c, c.kind === 'minor' ? 'Ugh, fine...' : 'Eh... okay.');
-      this.emit('refusedOk', { text: `Good catch! ${why}` });
+      this.say(c, tr(c.kind === 'minor' ? 'say.minorRefused' : 'say.refused'));
+      this.emit('refusedOk', { text: tr('msg.goodCatch', { why: tr(`why.${c.kind}`) }) });
       this._leave(c, false);
     }
   }
@@ -214,20 +213,20 @@ export class CashierSim {
       if (c.overLimit && !c.saidMax5) {
         c.saidMax5 = true;
         this.stats.ruleCalls++;
-        this.emit('ok', { text: 'Max 5 gram per person.' });
-        this.say(c, `Oh right. Then ${this.orderText(c)}.`);
+        this.emit('ok', { text: tr('msg.max5') });
+        this.say(c, tr('say.max5ok', { order: this.orderText(c) }));
       } else {
-        this.say(c, "I know, I'm under 5 gram.");
+        this.say(c, tr('say.under5'));
         c.patience -= 3;
       }
     } else if (rule === 'alcohol') {
       if (c.alcohol && !c.saidNoAlcohol) {
         c.saidNoAlcohol = true;
         this.stats.ruleCalls++;
-        this.emit('ok', { text: 'No alcohol in a coffeeshop.' });
-        this.say(c, `Ah, no beer here. Just ${this.orderText(c)} then.`);
+        this.emit('ok', { text: tr('msg.noAlcohol') });
+        this.say(c, tr('say.noBeerOk', { order: this.orderText(c) }));
       } else {
-        this.say(c, "I didn't ask for alcohol?");
+        this.say(c, tr('say.noAlcAsked'));
         c.patience -= 3;
       }
     }
@@ -262,7 +261,7 @@ export class CashierSim {
     const wantMap = Object.fromEntries(want.map((l) => [l.id, l.qty]));
     const grams = this.bagGrams(c);
     if (grams > this.rules.maxGrams) {
-      this._strike(`Sold ${grams} gram! Max is ${this.rules.maxGrams}.`);
+      this._strike(tr('strike.overMax', { g: grams, max: this.rules.maxGrams }));
     } else {
       const same = Object.keys({ ...wantMap, ...c.bag }).every((id) => (wantMap[id] || 0) === (c.bag[id] || 0));
       if (!same) {
@@ -272,8 +271,8 @@ export class CashierSim {
         if (!legalSame) {
           this.stats.mistakes++;
           c.patience -= 6;
-          this.say(c, `Hmm, that's not right. I asked for ${this.orderText(c)}.`);
-          this.emit('mistake', { text: 'Wrong order' });
+          this.say(c, tr('say.wrong', { order: this.orderText(c) }));
+          this.emit('mistake', { text: tr('msg.wrongOrder') });
           return { ok: false, reason: 'mismatch' };
         }
         c.saidMax5 = true;
@@ -281,7 +280,7 @@ export class CashierSim {
     }
     if (c.alcohol && !c.saidNoAlcohol) {
       c.patience -= 4;
-      this.say(c, 'No beer? Okay, whatever.');
+      this.say(c, tr('say.noBeer'));
     }
     c.step = 'pay';
     c.total = this.bagTotal(c);
@@ -292,9 +291,9 @@ export class CashierSim {
         Math.ceil(t / 50) * 50;
       if (c.cashGiven === t) c.cashGiven = t; // exact
       c.change = 0;
-      this.say(c, `Cash, here's €${c.cashGiven}.`);
+      this.say(c, tr('say.cash', { amt: euro(c.cashGiven, 0) }));
     } else {
-      this.say(c, 'PIN please.');
+      this.say(c, tr('say.pin'));
     }
     return { ok: true };
   }
@@ -321,14 +320,14 @@ export class CashierSim {
     }
     if (diff > 0) {
       this.stats.changeLost = round2(this.stats.changeLost + diff);
-      this.emit('mistake', { text: `You gave €${diff.toFixed(2)} too much` });
+      this.emit('mistake', { text: tr('msg.overChange', { amt: euro(diff) }) });
       this._complete(c);
       return { ok: true, over: diff };
     }
     this.stats.mistakes++;
     c.patience -= 6;
-    this.say(c, `Hey, I'm missing €${(-diff).toFixed(2).replace('.', ',')}.`);
-    this.emit('mistake', { text: 'Not enough change' });
+    this.say(c, tr('say.missing', { amt: euro(-diff) }));
+    this.emit('mistake', { text: tr('msg.notEnough') });
     return { ok: false, short: -diff };
   }
 
@@ -359,7 +358,7 @@ export class CashierSim {
     this.stats.revenue = round2(this.stats.revenue + c.total);
     this.stats.tips = round2(this.stats.tips + tip);
     this.stats.served++;
-    this.say(c, this.rng.pick(this.data.lines.thanks));
+    this.say(c, this.rng.pick(tl('line.thanks')));
     this.emit('sale', { total: c.total, tip });
     this._leave(c, false);
   }
@@ -445,7 +444,7 @@ export class CashierSim {
         c.yaw = 0;
         const [rx, rz] = this.L.register;
         c.yaw = Math.atan2(rx - c.x, rz - c.z);
-        this.say(c, `${c.greeting} Here's my ID.`);
+        this.say(c, tr('say.hereId', { greet: c.greeting }));
         this.emit('arrive', { id: c.id });
       } else if (c.phase === 'enter') {
         c.phase = 'queue';
@@ -461,15 +460,15 @@ export class CashierSim {
       c.patience -= dt;
       if (c.patience <= 0) {
         this.stats.walkouts++;
-        this.say(c, this.rng.pick(this.data.lines.angry));
-        this.emit('walkout', { text: `${c.first} got tired of waiting` });
+        this.say(c, this.rng.pick(tl('line.angry')));
+        this.emit('walkout', { text: tr('msg.tired', { name: c.first }) });
         this._leave(c, true);
       }
     } else if (c.phase === 'queue') {
       c.queuePatience -= dt;
       if (c.queuePatience <= 0) {
         this.stats.walkouts++;
-        this.emit('walkout', { text: 'Someone left the queue' });
+        this.emit('walkout', { text: tr('msg.leftQueue') });
         this._leave(c, true);
       }
     }
@@ -477,8 +476,8 @@ export class CashierSim {
 
   score() {
     const s = this.stats;
-    return Math.round(s.revenue + s.tips * 2 + s.refusedOk * 8 + s.ruleCalls * 4 - s.wrongRefusals * 6 - s.walkouts * 4 -
-      s.strikes * 30 - s.mistakes * 2 - s.changeLost);
+    return Math.max(0, Math.round(s.revenue + s.tips * 2 + s.refusedOk * 8 + s.ruleCalls * 4 - s.wrongRefusals * 6 - s.walkouts * 4 -
+      s.strikes * 30 - s.mistakes * 2 - s.changeLost));
   }
 
   starsFor(score) {

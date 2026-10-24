@@ -1,5 +1,6 @@
-import { C, SERIF } from '../gui.js';
-import { BaseScreen, vrButton } from './common.js';
+import { C } from '../gui.js';
+import { BaseScreen, vrButton, langChips } from './common.js';
+import { t } from '../i18n.js';
 import { Crowd } from '../sim/crowd.js';
 import { Nav } from '../sim/nav.js';
 import { rng } from '../util.js';
@@ -17,40 +18,105 @@ function alleyLife(screen) {
   return crowd;
 }
 
+/** The black COFFEESHOP strip from under the alley sign. */
+function signStrip(gui, cx, y, text, { size = 14, tilt = -0.015, maxW = 0 } = {}) {
+  const S = gui.S;
+  const w = Math.min(maxW || 9999, gui.measure(text, size * S, 'label') + text.length * 2.2 * S + 28 * S);
+  const h = size * 1.9 * S;
+  gui.tilted(cx, y + h / 2, tilt, () => {
+    gui.ctx.fillStyle = '#000';
+    gui.ctx.fillRect(cx - w / 2, y, w, h);
+    gui.text(text, cx, y + h * 0.68, size * S, { font: 'label', color: C.paper, align: 'center', spacing: 2.2 * S,
+      max: w - 16 * S });
+  });
+  return h;
+}
+
+/** Wordmark: smiley + KRONKEL tiles + strip. Returns the bottom y. */
+function wordmark(gui, cx, top, width, time, scale = 1) {
+  const S = gui.S * scale;
+  const face = Math.min(120 * S, width * 0.3);
+  const tileSize = Math.min(48 * S, (width - 10 * S) / 7.7);
+  gui.image(gui.logo, cx - face / 2, top + Math.sin(time * 2.2) * 3 * S, face, face, Math.sin(time * 1.3) * 0.08 - 0.06);
+  const ty = top + face * 0.92;
+  gui.tiles('KRONKEL', cx, ty, tileSize, { align: 'center', tilt: -0.02, wobble: 1.2 * S });
+  const sy = ty + tileSize + 14 * S;
+  signStrip(gui, cx, sy, 'COFFEESHOP · NIJMEGEN · SINDS 1986', { size: 13.5 * scale, maxW: width });
+  gui.tape(t('title.tape'), cx + tileSize * 3.1, ty - 8 * S, { size: 14 * S, color: C.yellow, tilt: 0.12 });
+  return sy + 28 * S;
+}
+
+/** Rough height of the wordmark at a given scale, for layout. */
+function wordmarkHeight(gui, width, scale = 1) {
+  const S = gui.S * scale;
+  return Math.min(120 * S, width * 0.3) * 0.92 + Math.min(48 * S, (width - 10 * S) / 7.7) + 42 * S;
+}
+
 export class AgeScreen extends BaseScreen {
   enter() {
     this.world.setView('title');
     this.world.setUpgrades(this.data.upgrades.map((u) => u.id));
     this.world.setHour(22.5);
     this.under = false;
+    this.t = 0;
+  }
+
+  update(dt) {
+    this.t += dt;
   }
 
   draw(gui) {
     const S = gui.S;
-    gui.box(0, 0, gui.w, gui.h, { r: 0, fill: 'rgba(5,10,7,0.55)', stroke: null });
-    const w = Math.min(gui.w - 32, 480 * S);
-    const h = 360 * S;
+    gui.dim(0.55);
+    const w = Math.min(gui.w - 32 * S, 470 * S);
     const x = (gui.w - w) / 2;
-    const y = (gui.h - h) / 2;
-    gui.box(x, y, w, h, { r: 24, fill: C.panel2, shadow: true, stroke: C.gold + '44' });
-    gui.image(this.game.logo, gui.w / 2 - 230 * S, y + 22 * S, 62 * S, 62 * S);
-    gui.logo(gui.w / 2 + 34 * S, y + 70 * S, 52 * S);
-    gui.text('18+', gui.w / 2, y + 108 * S, 20 * S, { align: 'center', color: C.red, weight: 800 });
-    const text = this.under
-      ? 'No problem! Kronkel will still be there when you turn 18. Come back then.'
-      : 'This game is set in a real Dutch coffeeshop and is about selling cannabis legally in the Netherlands. It is meant for adults. Are you 18 or older?';
-    gui.paragraph(text, gui.w / 2, y + 124 * S, w - 56 * S, 15 * S, { color: C.text, align: 'center' });
-    if (this.under) return;
+    const text = t(this.under ? 'age.under' : 'age.text');
+    const badge = 74 * S;
+    const pw = w - 48 * S - badge - 14 * S;
+    const ph = gui.wrap(text, pw, 16 * S, 'body', 600).length * 16 * S * 1.38;
+    const h = Math.max(badge + 30 * S, ph + 34 * S) + 54 * S + 88 * S;
+    const avail = gui.h - gui.safe.top - gui.safe.bottom - h - 36 * S;
+    const scale = Math.max(0.55, Math.min(1, avail / wordmarkHeight(gui, w)));
+    const top = gui.safe.top + Math.max(10 * S, (avail - wordmarkHeight(gui, w, scale)) / 2);
+    const y = wordmark(gui, gui.w / 2, top, w, this.t, scale) + 22 * S;
+    gui.card(x, y, w, h, { tone: 'paper', label: t('age.label'), labelColor: C.red, labelText: C.paper });
+    // 18+ as a round door sticker
+    const bx = x + w - 24 * S - badge / 2;
+    const by = y + 26 * S + badge / 2;
+    gui.tilted(bx, by, 0.12, () => {
+      const c = gui.ctx;
+      c.beginPath();
+      c.arc(bx + 4 * S, by + 4 * S, badge / 2, 0, Math.PI * 2);
+      c.fillStyle = C.ink;
+      c.fill();
+      c.beginPath();
+      c.arc(bx, by, badge / 2, 0, Math.PI * 2);
+      c.fillStyle = C.red;
+      c.fill();
+      c.lineWidth = 3 * S;
+      c.strokeStyle = C.ink;
+      c.stroke();
+      gui.text('18+', bx, by + 10 * S, 28 * S, { font: 'display', color: C.paper, align: 'center' });
+    });
+    gui.paragraph(text, x + 24 * S, y + 22 * S, pw, 16 * S, { color: C.ink, weight: 600 });
+    langChips(gui, this.game, gui.w - gui.safe.right - 14 * S, gui.safe.top + 14 * S);
+    const qy = y + Math.max(badge + 30 * S, ph + 34 * S);
+    if (this.under) {
+      gui.stamp(t('stamp.refused'), gui.w / 2, qy + 70 * S, 34 * S, C.red, -0.12);
+      return;
+    }
+    gui.text(t('age.q'), x + 24 * S, qy + 30 * S, 24 * S, { font: 'display', color: C.ink, max: w - 48 * S });
     const bw = (w - 60 * S) / 2;
-    gui.button(x + 24 * S, y + h - 76 * S, bw, 52 * S, "I'm 18 or older", () => {
+    gui.button(x + 24 * S, y + h - 82 * S, bw, 58 * S, t('age.yes'), () => {
       this.game.save.ageOk = true;
       this.game.persist();
       sfx.ok();
       this.game.setScreen('title');
-    }, { kind: 'primary' });
-    gui.button(x + 36 * S + bw, y + h - 76 * S, bw, 52 * S, "I'm younger", () => {
+    }, { kind: 'yellow', icon: 'check', size: 21 * S });
+    gui.button(x + 36 * S + bw, y + h - 82 * S, bw, 58 * S, t('age.no'), () => {
       this.under = true;
-    });
+      sfx.error();
+    }, { size: 21 * S });
   }
 }
 
@@ -74,80 +140,101 @@ export class TitleScreen extends BaseScreen {
     return { x: 11.6, z: 8.2, yaw: Math.PI / 2, panelY: 1.35, panelDist: 1.1 };
   }
 
+  /** Big tilted sticker card for a game mode: number tile, title, one-line pitch. */
+  _mode(gui, x, y, w, h, { id, title, sub, fill, tilt, stars, onClick, num }) {
+    const S = gui.S;
+    const pressed = gui.pressedId === id && gui.pointer.down && gui._inside(x, y, w, h);
+    const hover = !gui.pointer.touch && gui._inside(x, y, w, h);
+    const off = pressed ? 5 * S : hover ? -2 * S : 0;
+    gui.tilted(x + w / 2, y + h / 2, tilt, () => {
+      const ox = x + off;
+      const oy = y + off;
+      gui.sticker(ox, oy, w, h, { fill, r: 12, shadow: pressed ? 0 : hover ? 8 : 6, outline: 3 });
+      // number as a sign tile
+      const ts = Math.min(h - 26 * S, 54 * S);
+      const tx = ox + 14 * S;
+      const tyy = oy + (h - ts) / 2;
+      gui.ctx.fillStyle = C.ink;
+      gui.rr(tx, tyy, ts, ts, 8 * S);
+      gui.ctx.fill();
+      gui.text(num, tx + ts / 2, tyy + ts * 0.68, ts * 0.5, { font: 'display', align: 'center',
+        color: fill === C.yellow ? C.yellow : C.red });
+      const lx = tx + ts + 14 * S;
+      const titleSize = Math.min(30 * S, h * 0.36);
+      const subSize = Math.min(14.5 * S, h * 0.2);
+      const block = titleSize * 0.74 + 8 * S + subSize * 0.8;
+      const by = oy + (h - block) / 2 + titleSize * 0.74;
+      const right = stars ? 5 * 11 * S * 2.25 + 24 * S : 44 * S;
+      gui.text(title, lx, by, titleSize, { font: 'display', color: C.ink, max: w - (lx - ox) - right });
+      gui.text(sub, lx, by + 8 * S + subSize * 0.85, subSize, { color: 'rgba(18,16,21,0.75)', weight: 600,
+        max: w - (lx - ox) - 40 * S });
+      if (stars) gui.smileys(ox + w - 5 * 11 * S * 2.25 - 14 * S, oy + 20 * S, 11 * S, stars);
+      gui.icon('play', ox + w - 26 * S, oy + h / 2 + (stars ? 8 * S : 0), 18 * S, C.ink);
+    });
+    gui.region(x, y, w, h, onClick, { id, focusable: true, r: 12 * S });
+  }
+
   draw(gui) {
     const S = gui.S;
     const g = this.game;
     const save = g.save;
     const portrait = gui.portrait;
-    const sl = gui.safe.left + 20 * S;
-    // darken the side the menu sits on
     const c = gui.ctx;
-    const grad = portrait ? c.createLinearGradient(0, gui.h, 0, gui.h * 0.25) : c.createLinearGradient(0, 0, gui.w * 0.6, 0);
-    grad.addColorStop(0, 'rgba(6,12,9,0.88)');
-    grad.addColorStop(1, 'rgba(6,12,9,0)');
+    const grad = portrait ? c.createLinearGradient(0, gui.h, 0, gui.h * 0.3) : c.createLinearGradient(0, 0, gui.w * 0.62, 0);
+    grad.addColorStop(0, 'rgba(10,8,14,0.92)');
+    grad.addColorStop(0.55, 'rgba(10,8,14,0.6)');
+    grad.addColorStop(1, 'rgba(10,8,14,0)');
     c.fillStyle = grad;
     c.fillRect(0, 0, gui.w, gui.h);
 
-    const colW = portrait ? gui.w - sl * 2 : Math.min(420 * S, gui.w * 0.44);
-    const cx = portrait ? gui.w / 2 : sl + colW / 2;
-    const face = (portrait ? 92 : 86) * S;
-    const logoY = portrait ? gui.safe.top + 120 * S + face : gui.safe.top + 70 * S + face * 0.55;
-    const bob = Math.sin(this.t * 2.2) * 3 * S;
-    if (portrait) gui.image(g.logo, cx - face / 2, logoY - 58 * S - face + bob, face, face);
-    else gui.image(g.logo, sl - 6 * S, logoY - face * 0.86 + bob, face, face);
-    const wordX = portrait ? cx : sl + face + (colW - face) / 2 - 4 * S;
-    gui.text('KRONKEL', wordX, logoY, (portrait ? 58 : 60) * S, { align: 'center', family: SERIF, color: C.gold,
-      weight: 700, shadow: true, max: portrait ? colW : colW - face });
-    gui.text('THE COFFEESHOP GAME', wordX, logoY + 26 * S, 13 * S, { align: 'center', color: C.text, weight: 800 });
-    gui.text('Vlaamsegas · Nijmegen · since 1986', wordX, logoY + 46 * S, 12 * S, { align: 'center', color: C.dim, weight: 600 });
-
-    const bh = 58 * S;
-    const gap = 10 * S;
-    const buttons = 3;
-    let y = portrait ? gui.h - gui.safe.bottom - 24 * S - (bh * buttons + gap * buttons + 46 * S + (g.xrSupported ? 56 * S : 0))
-      : logoY + 80 * S;
-    const x = portrait ? sl : sl;
-    gui.button(x, y, colW, bh, 'Kassa', () => g.setScreen('cashier'), {
-      kind: 'primary', sub: `Sell at the counter · ${save.best.cashier ? `best ${save.best.cashier}` : 'new'}`,
-      align: 'left', size: 20 * S, id: 'm-cashier' });
-    this._stars(gui, x + colW - 18 * S, y + bh / 2, save.stars.cashier);
+    const sl = gui.safe.left + 22 * S;
+    const colW = portrait ? gui.w - sl * 2 : Math.min(460 * S, gui.w * 0.44);
+    const cx = sl + colW / 2;
+    const gap = 14 * S;
+    const extra = 58 * S + (g.xrSupported ? 60 * S : 0);
+    const footer = portrait ? 18 * S : 44 * S;
+    const minCard = portrait ? 80 * S : 76 * S;
+    const top = gui.safe.top + (portrait ? 26 : 16) * S;
+    const room = gui.h - gui.safe.bottom - footer - extra - 3 * minCard - 2 * gap - 14 * S - top;
+    const scale = Math.max(0.55, Math.min(1, room / wordmarkHeight(gui, colW)));
+    const markBottom = wordmark(gui, cx, top, colW, this.t, scale);
+    const free = gui.h - gui.safe.bottom - footer - extra - 2 * gap - (markBottom + 14 * S);
+    const bh = Math.max(minCard * 0.85, Math.min(portrait ? 92 * S : 96 * S, free / 3));
+    let y = portrait ? gui.h - gui.safe.bottom - footer - extra - 3 * bh - 2 * gap : markBottom + 14 * S;
+    this._mode(gui, sl, y, colW, bh, { id: 'm-cashier', num: '01', title: t('mode.cashier'), fill: C.yellow, tilt: -0.012,
+      sub: t('mode.cashier.sub'), stars: save.stars.cashier, onClick: () => g.setScreen('cashier') });
     y += bh + gap;
-    gui.button(x, y, colW, bh, 'Bediening', () => g.setScreen('server'), {
-      sub: `Serve the tables · ${save.best.server ? `best ${save.best.server}` : 'new'}`, align: 'left', size: 20 * S,
-      id: 'm-server' });
-    this._stars(gui, x + colW - 18 * S, y + bh / 2, save.stars.server);
+    this._mode(gui, sl, y, colW, bh, { id: 'm-server', num: '02', title: t('mode.server'), fill: C.paper, tilt: 0.01,
+      sub: t('mode.server.sub'), stars: save.stars.server, onClick: () => g.setScreen('server') });
     y += bh + gap;
-    gui.button(x, y, colW, bh, 'Tycoon', () => g.setScreen('tycoon'), {
-      sub: save.tycoon ? `Your Kronkel · day ${save.tycoon.day}` : 'Build and run your own Kronkel', align: 'left',
-      size: 20 * S, id: 'm-tycoon' });
-    y += bh + gap;
-    const half = (colW - gap) / 2;
-    gui.button(x, y, half, 40 * S, 'How to play', () => g.setScreen('howto', { back: 'title' }), { size: 14 * S });
-    gui.button(x + half + gap, y, half, 40 * S, 'Settings', () => g.setScreen('settings'), { size: 14 * S, icon: 'gear' });
-    y += 40 * S + gap;
-    if (g.xrSupported) vrButton(g, gui, x, y, colW, 46 * S);
-    // footer
-    const fy = gui.h - gui.safe.bottom - 14 * S;
+    this._mode(gui, sl, y, colW, bh, { id: 'm-tycoon', num: '03', title: t('mode.tycoon'), fill: C.paper, tilt: -0.008,
+      sub: save.tycoon ? t('mode.tycoon.day', { day: save.tycoon.day }) : t('mode.tycoon.sub'),
+      onClick: () => g.setScreen('tycoon') });
+    y += bh + 16 * S;
+    const half = (colW - 12 * S) / 2;
+    gui.button(sl, y, half, 44 * S, t('btn.howto'), () => g.setScreen('howto', { back: 'title' }), { kind: 'ink',
+      icon: 'book', size: 16 * S });
+    gui.button(sl + half + 12 * S, y, half, 44 * S, t('btn.settings'), () => g.setScreen('settings'), { kind: 'ink',
+      icon: 'gear', size: 16 * S });
+    y += 44 * S + 14 * S;
+    if (g.xrSupported) vrButton(g, gui, sl, y, colW, 46 * S);
+    langChips(gui, g, gui.w - gui.safe.right - 14 * S, gui.safe.top + 14 * S, { size: portrait ? 34 : 40 });
     if (!portrait) {
-      gui.text('Fan-made game. Not affiliated with or endorsed by Coffeeshop Kronkel. 18+ only.', sl, fy, 11 * S,
-        { color: 'rgba(246,239,217,0.55)', weight: 600 });
-      gui.button(gui.w - gui.safe.right - 110 * S, fy - 26 * S, 96 * S, 32 * S, 'About', () => g.setScreen('credits'),
-        { kind: 'ghost', size: 12 * S });
+      const fy = gui.h - gui.safe.bottom - 14 * S;
+      gui.text(t('title.footer'), sl, fy, 13 * S,
+        { font: 'label', color: 'rgba(245,239,225,0.5)', weight: 700 });
+      gui.button(gui.w - gui.safe.right - 112 * S, fy - 30 * S, 96 * S, 36 * S, t('btn.about'), () => g.setScreen('credits'),
+        { kind: 'ghost', size: 15 * S });
       const hint = this._hint();
-      if (hint) gui.text(hint, gui.w - gui.safe.right - 20 * S, gui.safe.top + 28 * S, 12 * S, { align: 'right', color: C.dim });
+      if (hint) gui.tape(hint, gui.w - gui.safe.right - 150 * S, gui.safe.top + 80 * S, { size: 14 * S, color: C.paper,
+        tilt: 0.02 });
     }
-  }
-
-  _stars(gui, rx, cy, n) {
-    if (!n) return;
-    const r = 6 * gui.S;
-    gui.stars(rx - 5 * r * 2.3, cy - 8 * gui.S, r, n);
   }
 
   _hint() {
     const d = this.game.input.lastDevice;
-    if (d === 'gamepad') return 'Ⓐ select · Ⓑ back · stick to move';
-    if (d === 'keyboard') return 'Arrows + Enter · Esc to go back';
+    if (d === 'gamepad') return t('hint.gamepad');
+    if (d === 'keyboard') return t('hint.keyboard');
     return null;
   }
 }

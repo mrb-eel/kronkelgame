@@ -6,16 +6,48 @@ import { CashierSim, CHANGE_UNITS } from '../src/sim/cashier.js';
 import { ServerSim } from '../src/sim/server.js';
 import { TycoonSim, newTycoon, dateOf } from '../src/sim/tycoon.js';
 import { Nav, pathLength } from '../src/sim/nav.js';
-import { euro, ageOn, round2 } from '../src/util.js';
+import { euro, ageOn, round2, dateText } from '../src/util.js';
+import { setLang, t, td, dictionaries, detectLang } from '../src/i18n.js';
 
 const data = JSON.parse(readFileSync(new URL('../assets/gamedata.json', import.meta.url)));
 const layout = JSON.parse(readFileSync(new URL('../assets/layout.json', import.meta.url)));
 const ALL = new Set(data.upgrades.map((u) => u.id));
 
-test('euro formatting is Dutch', () => {
+test('euro and dates follow the language', () => {
+  setLang('nl');
   assert.equal(euro(12.5), '€12,50');
   assert.equal(euro(1234.5), '€1.234,50');
   assert.equal(euro(-3), '-€3,00');
+  assert.equal(dateText(new Date(2026, 6, 4)), '04-07-2026');
+  setLang('de');
+  assert.equal(euro(1234.5), '€1.234,50');
+  assert.equal(dateText(new Date(2026, 6, 4)), '04.07.2026');
+  setLang('en');
+  assert.equal(euro(1234.5), '€1,234.50');
+  assert.equal(euro(5000, 0), '€5,000');
+  assert.equal(dateText(new Date(2026, 6, 4)), '04/07/2026');
+});
+
+test('every language has every key, the same placeholders and same-length lists', () => {
+  const { en } = dictionaries;
+  const holes = (s) => (Array.isArray(s) ? s.join(' ') : s).match(/\{\w+\}/g)?.sort().join() || '';
+  for (const id of ['nl', 'de']) {
+    const d = dictionaries[id];
+    assert.deepEqual(Object.keys(d).sort(), Object.keys(en).sort(), `${id} keys differ from en`);
+    for (const k of Object.keys(en)) {
+      assert.equal(Array.isArray(d[k]), Array.isArray(en[k]), `${id}.${k} type`);
+      // lists are picked with the seeded rng, so equal length keeps runs identical across languages
+      if (Array.isArray(en[k])) assert.equal(d[k].length, en[k].length, `${id}.${k} length`);
+      assert.equal(holes(d[k]), holes(en[k]), `${id}.${k} placeholders`);
+    }
+  }
+  setLang('de');
+  assert.equal(t('hud.day', { n: 3 }), 'Tag 3');
+  assert.equal(td('up', data.upgrades.find((u) => u.id === 'terrace')), 'Dachterrasse');
+  assert.equal(td('item', data.weed[0]), 'Amnesia Haze'); // strain names stay as they are
+  setLang('en');
+  assert.equal(detectLang(['de-DE', 'en']), 'de');
+  assert.equal(detectLang(['fr-FR']), 'en');
 });
 
 test('age calculation handles birthdays', () => {
@@ -162,7 +194,7 @@ test('tycoon runs 60 days without NaN and keeps stock under the legal cap', () =
     const r = state.lastReport;
     for (const v of [r.revenue, r.profit, state.cash, state.rep]) assert.ok(Number.isFinite(v));
     assert.ok(state.rep >= 0 && state.rep <= 5);
-    if (r.event === 'De Vierdaagse!') sawVierdaagse = true;
+    if (r.event === 'vierdaagse') sawVierdaagse = true;
     sim.nextDay();
   }
   assert.ok(sawVierdaagse, 'the Vierdaagse should happen in July');

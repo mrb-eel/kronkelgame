@@ -4,7 +4,7 @@ const KEY = 'kronkel-save-v1';
 
 const DEFAULTS = {
   ageOk: false,
-  settings: { music: 0.5, sfx: 0.8, quality: 'auto', haptics: true },
+  settings: { music: 0.5, sfx: 0.8, quality: 'auto', haptics: true, lang: null },
   best: { cashier: 0, server: 0 },
   stars: { cashier: 0, server: 0 },
   tycoon: null,
@@ -35,8 +35,10 @@ export function writeSave() {
 
 export function resetSave() {
   const keepAge = mem?.ageOk;
+  const keepSettings = mem?.settings;
   mem = structuredClone(DEFAULTS);
   mem.ageOk = !!keepAge;
+  if (keepSettings) mem.settings = keepSettings; // "Settings stay"
   writeSave();
   return mem;
 }

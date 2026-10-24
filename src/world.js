@@ -201,7 +201,7 @@ export class World {
     c.fillStyle = 'rgba(0,0,0,0.65)';
     c.fillRect(0, 0, 120, 16);
     c.fillStyle = '#fff';
-    c.font = 'bold 11px Inter, sans-serif';
+    c.font = '800 12px "Barlow Condensed", sans-serif';
     c.fillText(`NEC 2 - 1 AJA   ${String(60 + Math.floor(t / 4) % 30).padStart(2, '0')}'`, 4, 12);
     this.tvTex.needsUpdate = true;
   }
@@ -524,26 +524,40 @@ export class World {
     const c = document.createElement('canvas');
     c.width = c.height = 128;
     const g = c.getContext('2d');
-    g.fillStyle = 'rgba(12,22,16,0.92)';
-    g.beginPath();
-    g.arc(64, 56, 44, 0, Math.PI * 2);
-    g.moveTo(52, 96);
-    g.lineTo(64, 120);
-    g.lineTo(76, 96);
+    const ink = '#121015';
+    const fill = { order: '#ffc814', bill: '#ffc814', angry: '#d51f2b' }[icon] || '#f5efe1';
+    const bubble = (ox, oy) => {
+      g.beginPath();
+      g.arc(62 + ox, 54 + oy, 38, 0, Math.PI * 2);
+      g.moveTo(50 + ox, 88 + oy);
+      g.lineTo(60 + ox, 116 + oy);
+      g.lineTo(74 + ox, 86 + oy);
+      g.closePath();
+    };
+    bubble(5, 5);
+    g.fillStyle = ink;
     g.fill();
     if (level >= 0) {
       const f = level / 8;
-      g.strokeStyle = 'rgba(255,255,255,0.15)';
-      g.lineWidth = 8;
+      g.lineWidth = 12;
+      g.strokeStyle = ink;
       g.beginPath();
-      g.arc(64, 56, 48, 0, Math.PI * 2);
+      g.arc(62, 54, 47, 0, Math.PI * 2);
       g.stroke();
-      g.strokeStyle = f > 0.6 ? '#9fe07a' : f > 0.3 ? '#ffcf5a' : '#ff6b6b';
+      g.lineWidth = 7;
+      g.strokeStyle = f > 0.6 ? '#ffc814' : f > 0.3 ? '#ff9a2e' : '#d51f2b';
       g.beginPath();
-      g.arc(64, 56, 48, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f);
+      g.arc(62, 54, 47, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f);
       g.stroke();
     }
-    drawIcon(g, icon, 64, 56);
+    bubble(0, 0);
+    g.fillStyle = fill;
+    g.fill();
+    g.lineWidth = 6;
+    g.lineJoin = 'round';
+    g.strokeStyle = ink;
+    g.stroke();
+    drawIcon(g, icon, 62, 54);
     tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     this.iconCache.set(key, tex);
@@ -773,37 +787,40 @@ class Person {
 }
 
 function drawIcon(g, icon, cx, cy) {
+  const ink = '#121015';
+  const red = '#d51f2b';
   g.save();
   g.translate(cx, cy);
-  g.fillStyle = '#f6efd9';
-  g.strokeStyle = '#f6efd9';
-  g.lineWidth = 6;
+  g.fillStyle = ink;
+  g.strokeStyle = ink;
+  g.lineWidth = 7;
   g.lineCap = 'round';
   g.lineJoin = 'round';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  const txt = (t, color = '#f6efd9', size = 52) => {
+  const txt = (t, color = ink, size = 52) => {
     g.fillStyle = color;
-    g.font = `900 ${size}px Inter, Arial, sans-serif`;
-    g.fillText(t, 0, 3);
+    g.font = `${size}px "Archivo Black", Impact, sans-serif`;
+    g.fillText(t, 0, 4);
   };
   switch (icon) {
     case 'order':
-      txt('!', '#ffcf5a', 64);
+      txt('!', ink, 62);
       break;
     case 'bill':
-      txt('€', '#9fe07a', 56);
+    case 'cash':
+      txt('€', ink, 54);
       break;
     case 'angry':
-      txt('!!', '#ff6b6b', 56);
+      txt('!!', '#f5efe1', 50);
       break;
     case 'wait': {
       g.beginPath();
-      g.arc(0, 0, 22, 0, Math.PI * 2);
+      g.arc(0, 0, 21, 0, Math.PI * 2);
       g.stroke();
       g.beginPath();
       g.moveTo(0, 0);
-      g.lineTo(0, -14);
+      g.lineTo(0, -13);
       g.moveTo(0, 0);
       g.lineTo(10, 6);
       g.stroke();
@@ -811,30 +828,32 @@ function drawIcon(g, icon, cx, cy) {
     }
     case 'food': {
       g.beginPath();
-      g.arc(0, 4, 24, 0, Math.PI);
+      g.arc(0, 8, 22, Math.PI, 0);
       g.closePath();
       g.fill();
-      g.fillRect(-28, 2, 56, 5);
+      g.fillRect(-28, 8, 56, 6);
       g.beginPath();
-      g.arc(0, -16, 4, 0, Math.PI * 2);
+      g.arc(0, -16, 4.5, 0, Math.PI * 2);
       g.fill();
       break;
     }
     case 'game': {
-      g.fillStyle = '#f6efd9';
       g.beginPath();
-      g.roundRect(-22, -22, 44, 44, 8);
+      g.roundRect(-21, -21, 42, 42, 7);
+      g.fillStyle = '#f5efe1';
       g.fill();
-      g.fillStyle = '#10201a';
+      g.lineWidth = 5;
+      g.stroke();
+      g.fillStyle = ink;
       for (const [x, y] of [[-10, -10], [10, 10], [0, 0], [10, -10], [-10, 10]]) {
         g.beginPath();
-        g.arc(x, y, 4.5, 0, Math.PI * 2);
+        g.arc(x, y, 4.2, 0, Math.PI * 2);
         g.fill();
       }
       break;
     }
     case 'dirty': {
-      g.strokeStyle = '#b9c9ff';
+      g.strokeStyle = '#9a45ff';
       for (let i = -1; i <= 1; i++) {
         g.beginPath();
         g.moveTo(i * 14 - 6, 18);
@@ -844,25 +863,16 @@ function drawIcon(g, icon, cx, cy) {
       break;
     }
     case 'seat':
-      txt('?', '#7ab8ff', 60);
+      txt('?', red, 58);
       break;
-    case 'happy': {
-      g.fillStyle = '#ff7fb6';
-      g.beginPath();
-      g.moveTo(0, 20);
-      g.bezierCurveTo(-34, -6, -14, -30, 0, -12);
-      g.bezierCurveTo(14, -30, 34, -6, 0, 20);
-      g.fill();
-      break;
-    }
-    case 'cash':
-      txt('€', '#ffcf5a', 56);
+    case 'happy':
+      txt('♥', red, 52);
       break;
     case 'id':
-      txt('ID', '#7ab8ff', 40);
+      txt('ID', ink, 38);
       break;
     default:
-      txt(icon.slice(0, 2), '#f6efd9', 40);
+      txt(icon.slice(0, 2), ink, 40);
   }
   g.restore();
 }
