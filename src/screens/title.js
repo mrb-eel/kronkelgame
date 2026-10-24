@@ -195,21 +195,17 @@ export class TitleScreen extends BaseScreen {
     const footer = portrait ? 18 * S : 44 * S;
     const minCard = portrait ? 80 * S : 76 * S;
     const top = gui.safe.top + (portrait ? 26 : 16) * S;
-    const room = gui.h - gui.safe.bottom - footer - extra - 3 * minCard - 2 * gap - 14 * S - top;
+    const room = gui.h - gui.safe.bottom - footer - extra - 2 * minCard - gap - 14 * S - top;
     const scale = Math.max(0.55, Math.min(1, room / wordmarkHeight(gui, colW)));
     const markBottom = wordmark(gui, cx, top, colW, this.t, scale);
-    const free = gui.h - gui.safe.bottom - footer - extra - 2 * gap - (markBottom + 14 * S);
-    const bh = Math.max(minCard * 0.85, Math.min(portrait ? 92 * S : 96 * S, free / 3));
-    let y = portrait ? gui.h - gui.safe.bottom - footer - extra - 3 * bh - 2 * gap : markBottom + 14 * S;
+    const free = gui.h - gui.safe.bottom - footer - extra - gap - (markBottom + 14 * S);
+    const bh = Math.max(minCard * 0.85, Math.min(portrait ? 108 * S : 112 * S, free / 2));
+    let y = portrait ? gui.h - gui.safe.bottom - footer - extra - 2 * bh - gap : markBottom + 14 * S;
     this._mode(gui, sl, y, colW, bh, { id: 'm-cashier', num: '01', title: t('mode.cashier'), fill: C.yellow, tilt: -0.012,
       sub: t('mode.cashier.sub'), stars: save.stars.cashier, onClick: () => g.setScreen('cashier') });
     y += bh + gap;
-    this._mode(gui, sl, y, colW, bh, { id: 'm-server', num: '02', title: t('mode.server'), fill: C.paper, tilt: 0.01,
-      sub: t('mode.server.sub'), stars: save.stars.server, onClick: () => g.setScreen('server') });
-    y += bh + gap;
-    this._mode(gui, sl, y, colW, bh, { id: 'm-tycoon', num: '03', title: t('mode.tycoon'), fill: C.paper, tilt: -0.008,
-      sub: save.tycoon ? t('mode.tycoon.day', { day: save.tycoon.day }) : t('mode.tycoon.sub'),
-      onClick: () => g.setScreen('tycoon') });
+    this._mode(gui, sl, y, colW, bh, { id: 'm-bar', num: '02', title: t('mode.bar'), fill: C.paper, tilt: 0.01,
+      sub: t('mode.bar.sub'), stars: save.stars.bar, onClick: () => g.setScreen('bar') });
     y += bh + 16 * S;
     const half = (colW - 12 * S) / 2;
     gui.button(sl, y, half, 44 * S, t('btn.howto'), () => g.setScreen('howto', { back: 'title' }), { kind: 'ink',

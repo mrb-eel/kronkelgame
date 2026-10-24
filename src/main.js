@@ -9,8 +9,7 @@ import { setLang, detectLang, t } from './i18n.js';
 import { AgeScreen, TitleScreen } from './screens/title.js';
 import { HowtoScreen, SettingsScreen, CreditsScreen } from './screens/menus.js';
 import { CashierScreen } from './screens/cashier.js';
-import { ServerScreen } from './screens/server.js';
-import { TycoonScreen } from './screens/tycoon.js';
+import { BarScreen } from './screens/bar.js';
 import { ResultsScreen } from './screens/results.js';
 
 const SCREENS = {
@@ -20,8 +19,7 @@ const SCREENS = {
   settings: SettingsScreen,
   credits: CreditsScreen,
   cashier: CashierScreen,
-  server: ServerScreen,
-  tycoon: TycoonScreen,
+  bar: BarScreen,
   results: ResultsScreen,
 };
 

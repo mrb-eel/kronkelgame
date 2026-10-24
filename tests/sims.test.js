@@ -3,8 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { CashierSim, CHANGE_UNITS } from '../src/sim/cashier.js';
-import { ServerSim } from '../src/sim/server.js';
-import { TycoonSim, newTycoon, dateOf } from '../src/sim/tycoon.js';
+import { BarSim, STATIONS } from '../src/sim/bar.js';
 import { Nav, pathLength } from '../src/sim/nav.js';
 import { euro, ageOn, round2, dateText } from '../src/util.js';
 import { setLang, t, td, dictionaries, detectLang } from '../src/i18n.js';
@@ -140,76 +139,49 @@ test('the 5 gram rule trims the order to exactly 5 g', () => {
   assert.ok(lines.some((l) => l.id === 'preroll'));
 });
 
-function autoServer(sim) {
+function autoBar(sim) {
   let guard = 0;
-  while (!sim.over && guard++ < 40000) {
+  while (!sim.over && guard++ < 60000) {
     sim.update(0.1);
-    const w = sim.waiter;
-    if (w.queue.length > 2) continue;
-    // seat someone if possible
-    const g = sim.waiting.find((x) => x.state === 'waiting');
-    if (g) {
-      const t = sim.tables.find((t) => t.state === 'free' && t.seats.length >= g.size && (t.level === 0 || sim.terraceOpen));
-      if (t) {
-        sim.selectHost();
-        sim.tapTable(t.id);
-      }
-    }
-    if (sim.ready.length && w.carry.length < 4) sim.tapPass();
-    for (const t of sim.tables) {
-      const grp = t.group && sim.groups.find((x) => x.id === t.group);
-      if (t.state === 'dirty' || (grp && ['ready', 'wantsBill'].includes(grp.state)) ||
-        (grp && grp.state === 'waitFood' && w.carry.some((c) => c.table === t.id)) || (grp && grp.wantsGame && !grp.hadGame)) {
-        sim.tapTable(t.id);
-      }
-    }
+    const t = sim.activeTicket;
+    if (!t || t.done) continue;
+    const step = t.steps[t.stepIdx];
+    sim.tapStation(step);
+    if (sim.activeTicket?.done) sim.serve(sim.activeTicket.id);
   }
   return sim;
 }
 
-test('an attentive waiter serves groups and earns money', () => {
-  const sim = autoServer(new ServerSim(data, layout, { seed: 11 }));
+test('a bar shift serving all orders earns revenue', () => {
+  setLang('en');
+  const sim = autoBar(new BarSim(data, { seed: 77 }));
   assert.ok(sim.over);
-  assert.ok(sim.stats.groupsServed > 8, `served ${sim.stats.groupsServed}`);
-  assert.ok(sim.stats.revenue > 100);
-  console.log('server score', sim.score(), 'stars', sim.starsFor(sim.score()), sim.stats);
+  assert.ok(sim.stats.served > 10, `only ${sim.stats.served} served`);
+  assert.equal(sim.stats.mistakes, 0, 'perfect autobar should make no mistakes');
+  assert.ok(sim.stats.revenue > 0);
+  assert.ok(sim.score() > 0);
+  console.log('bar score', sim.score(), 'stars', sim.starsFor(sim.score()), sim.stats);
 });
 
-test('tycoon runs 60 days without NaN and keeps stock under the legal cap', () => {
-  const state = newTycoon(42);
-  const sim = new TycoonSim(data, layout, state);
-  sim.prepareDay();
-  let sawVierdaagse = false;
-  for (let d = 0; d < 60; d++) {
-    if (state.event?.pending) sim.acceptOffer(true);
-    for (const kind of ['weed', 'hash']) sim.buyStock(kind, kind === 'weed' ? 300 : 150);
-    if (state.cash > 2500 && state.staff.cashier < 2) sim.hire('cashier', 1);
-    if (state.cash > 2500 && state.staff.cook < 1) sim.hire('cook', 1);
-    for (const u of data.upgrades) if (state.cash > u.cost + 1500) sim.buyUpgrade(u.id);
-    sim.startDay();
-    while (state.phase === 'run') {
-      sim.simulateHour();
-      assert.ok(sim.stockTotal() <= data.rules.maxStockGrams);
-    }
-    const r = state.lastReport;
-    for (const v of [r.revenue, r.profit, state.cash, state.rep]) assert.ok(Number.isFinite(v));
-    assert.ok(state.rep >= 0 && state.rep <= 5);
-    if (r.event === 'vierdaagse') sawVierdaagse = true;
-    sim.nextDay();
-  }
-  assert.ok(sawVierdaagse, 'the Vierdaagse should happen in July');
-  console.log('tycoon after 60 days', { cash: state.cash, rep: state.rep, upgrades: state.upgrades.length,
-    best: Math.max(...state.history.map((h) => h.revenue)) });
+test('tapping the wrong station counts as a mistake', () => {
+  const sim = new BarSim(data, { seed: 3 });
+  for (let i = 0; i < 20; i++) sim.update(0.5);
+  const t = sim.activeTicket;
+  assert.ok(t, 'should have a ticket by now');
+  const wrong = STATIONS.find((s) => s !== t.steps[0]);
+  const res = sim.tapStation(wrong);
+  assert.equal(res.ok, false);
+  assert.equal(sim.stats.mistakes, 1);
+  assert.equal(t.stepIdx, 0, 'progress should not advance on wrong tap');
 });
 
-test('Vierdaagse 2026 falls on 21-24 July', () => {
-  const state = newTycoon(1);
-  const sim = new TycoonSim(data, layout, state);
-  const days = [];
-  for (let d = 1; d <= 70; d++) {
-    state.day = d;
-    sim.prepareDay();
-    if (state.event?.id === 'vierdaagse') days.push(dateOf(state).toISOString().slice(0, 10));
+test('shakes are not spawned after hour 24.5', () => {
+  const sim = new BarSim(data, { seed: 5, shiftSeconds: 60 });
+  sim.hour = 24.6;
+  for (let i = 0; i < 100; i++) sim.update(0.1);
+  const shakeIds = data.bar.filter((m) => m.noLateOrder).map((m) => m.id);
+  for (const t of sim.tickets) {
+    assert.ok(!shakeIds.includes(t.item.id), `late shake order: ${t.item.id}`);
   }
-  assert.deepEqual(days, ['2026-07-21', '2026-07-22', '2026-07-23', '2026-07-24']);
 });
+

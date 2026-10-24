@@ -1,13 +1,12 @@
 // Local save (high scores, settings, tycoon progress). Storage can be unavailable (private mode,
 // blocked site data), so every access is wrapped and the game keeps working from memory.
-const KEY = 'kronkel-save-v1';
+const KEY = 'kronkel-save-v2';
 
 const DEFAULTS = {
   ageOk: false,
   settings: { music: 0.5, sfx: 0.8, quality: 'auto', haptics: true, lang: null },
-  best: { cashier: 0, server: 0 },
-  stars: { cashier: 0, server: 0 },
-  tycoon: null,
+  best: { cashier: 0, bar: 0 },
+  stars: { cashier: 0, bar: 0 },
   seenHowto: {},
 };
 
