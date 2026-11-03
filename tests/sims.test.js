@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { CashierSim, CHANGE_UNITS } from '../src/sim/cashier.js';
-import { BarSim, STATIONS } from '../src/sim/bar.js';
 import { Nav, pathLength } from '../src/sim/nav.js';
 import { euro, ageOn, round2, dateText } from '../src/util.js';
 import { setLang, t, td, dictionaries, detectLang } from '../src/i18n.js';
@@ -138,50 +137,3 @@ test('the 5 gram rule trims the order to exactly 5 g', () => {
   assert.equal(grams, 5);
   assert.ok(lines.some((l) => l.id === 'preroll'));
 });
-
-function autoBar(sim) {
-  let guard = 0;
-  while (!sim.over && guard++ < 60000) {
-    sim.update(0.1);
-    const t = sim.activeTicket;
-    if (!t || t.done) continue;
-    const step = t.steps[t.stepIdx];
-    sim.tapStation(step);
-    if (sim.activeTicket?.done) sim.serve(sim.activeTicket.id);
-  }
-  return sim;
-}
-
-test('a bar shift serving all orders earns revenue', () => {
-  setLang('en');
-  const sim = autoBar(new BarSim(data, { seed: 77 }));
-  assert.ok(sim.over);
-  assert.ok(sim.stats.served > 10, `only ${sim.stats.served} served`);
-  assert.equal(sim.stats.mistakes, 0, 'perfect autobar should make no mistakes');
-  assert.ok(sim.stats.revenue > 0);
-  assert.ok(sim.score() > 0);
-  console.log('bar score', sim.score(), 'stars', sim.starsFor(sim.score()), sim.stats);
-});
-
-test('tapping the wrong station counts as a mistake', () => {
-  const sim = new BarSim(data, { seed: 3 });
-  for (let i = 0; i < 20; i++) sim.update(0.5);
-  const t = sim.activeTicket;
-  assert.ok(t, 'should have a ticket by now');
-  const wrong = STATIONS.find((s) => s !== t.steps[0]);
-  const res = sim.tapStation(wrong);
-  assert.equal(res.ok, false);
-  assert.equal(sim.stats.mistakes, 1);
-  assert.equal(t.stepIdx, 0, 'progress should not advance on wrong tap');
-});
-
-test('shakes are not spawned after hour 24.5', () => {
-  const sim = new BarSim(data, { seed: 5, shiftSeconds: 60 });
-  sim.hour = 24.6;
-  for (let i = 0; i < 100; i++) sim.update(0.1);
-  const shakeIds = data.bar.filter((m) => m.noLateOrder).map((m) => m.id);
-  for (const t of sim.tickets) {
-    assert.ok(!shakeIds.includes(t.item.id), `late shake order: ${t.item.id}`);
-  }
-});
-

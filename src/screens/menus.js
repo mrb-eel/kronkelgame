@@ -4,7 +4,7 @@ import { setVolumes, sfx } from '../audio.js';
 import { resetSave } from '../save.js';
 import { t, tl, LANGS, getLang } from '../i18n.js';
 
-const HOWTO_TABS = ['kassa', 'bar', 'controls'];
+const HOWTO_TABS = ['kassa', 'controls'];
 
 export class HowtoScreen extends BaseScreen {
   enter() {

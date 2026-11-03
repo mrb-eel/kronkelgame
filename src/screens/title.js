@@ -190,22 +190,18 @@ export class TitleScreen extends BaseScreen {
     const sl = gui.safe.left + 22 * S;
     const colW = portrait ? gui.w - sl * 2 : Math.min(460 * S, gui.w * 0.44);
     const cx = sl + colW / 2;
-    const gap = 14 * S;
     const extra = 58 * S + (g.xrSupported ? 60 * S : 0);
     const footer = portrait ? 18 * S : 44 * S;
     const minCard = portrait ? 80 * S : 76 * S;
     const top = gui.safe.top + (portrait ? 26 : 16) * S;
-    const room = gui.h - gui.safe.bottom - footer - extra - 2 * minCard - gap - 14 * S - top;
+    const room = gui.h - gui.safe.bottom - footer - extra - minCard - 14 * S - top;
     const scale = Math.max(0.55, Math.min(1, room / wordmarkHeight(gui, colW)));
     const markBottom = wordmark(gui, cx, top, colW, this.t, scale);
-    const free = gui.h - gui.safe.bottom - footer - extra - gap - (markBottom + 14 * S);
-    const bh = Math.max(minCard * 0.85, Math.min(portrait ? 108 * S : 112 * S, free / 2));
-    let y = portrait ? gui.h - gui.safe.bottom - footer - extra - 2 * bh - gap : markBottom + 14 * S;
+    const free = gui.h - gui.safe.bottom - footer - extra - (markBottom + 14 * S);
+    const bh = Math.max(minCard * 0.85, Math.min(portrait ? 132 * S : 128 * S, free));
+    let y = portrait ? gui.h - gui.safe.bottom - footer - extra - bh : markBottom + 14 * S;
     this._mode(gui, sl, y, colW, bh, { id: 'm-cashier', num: '01', title: t('mode.cashier'), fill: C.yellow, tilt: -0.012,
       sub: t('mode.cashier.sub'), stars: save.stars.cashier, onClick: () => g.setScreen('cashier') });
-    y += bh + gap;
-    this._mode(gui, sl, y, colW, bh, { id: 'm-bar', num: '02', title: t('mode.bar'), fill: C.paper, tilt: 0.01,
-      sub: t('mode.bar.sub'), stars: save.stars.bar, onClick: () => g.setScreen('bar') });
     y += bh + 16 * S;
     const half = (colW - 12 * S) / 2;
     gui.button(sl, y, half, 44 * S, t('btn.howto'), () => g.setScreen('howto', { back: 'title' }), { kind: 'ink',

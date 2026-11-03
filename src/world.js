@@ -335,7 +335,7 @@ export class World {
     }
   }
 
-  /** view: title | cashier | bar | floor | terrace | tycoon | vr */
+  /** view: title | cashier | floor | terrace | tycoon | vr */
   setView(view, opts = {}) {
     this.view = view;
     this.pan = opts.pan ?? 0;
@@ -382,12 +382,6 @@ export class World {
           pos: new THREE.Vector3(3.8, 1.62, -4.95),
           look: new THREE.Vector3(3.8, portrait ? 1.1 : 1.3, -1.2),
           fov: portrait ? 72 : 58,
-        };
-      case 'bar':
-        return {
-          pos: new THREE.Vector3(3.8, 1.72, -2.4),
-          look: new THREE.Vector3(3.8, portrait ? 1.0 : 1.25, -5.5),
-          fov: portrait ? 74 : 62,
         };
       case 'floor':
       case 'tycoon': {

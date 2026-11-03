@@ -1,7 +1,7 @@
 # Kronkel: The Coffeeshop Game
 
 A fan-made game set in **Coffeeshop Kronkel** on Vlaamsegas in Nijmegen (since 1986). It's not an ad, just a game
-centred on the place: work the counter, run the floor, or build and manage your own Kronkel.
+centred on the place: you work the counter.
 
 It runs in the browser on **desktop, phones and tablets** (installable to the home screen and playable offline),
 with **game controllers**, and in **VR headsets** through WebXR (Quest, Pico, Vision Pro and other WebXR browsers).
@@ -10,13 +10,9 @@ browser, and the NL / EN / DE stickers on the title screen (or *Settings*) switc
 
 ![Title screen](docs/screenshots/game_title.jpg)
 
-| Kassa | Bediening | Tycoon |
+| Kassa | Phone (Deutsch) | Shift receipt |
 | --- | --- | --- |
-| ![Kassa](docs/screenshots/game_kassa_id.jpg) | ![Bediening](docs/screenshots/game_bediening.jpg) | ![Tycoon](docs/screenshots/game_tycoon.jpg) |
-
-| Phone (Deutsch) | Shift receipt | Day report |
-| --- | --- | --- |
-| ![Phone](docs/screenshots/game_phone_kassa.jpg) | ![Receipt](docs/screenshots/game_receipt.jpg) | ![Report](docs/screenshots/game_tycoon_report.jpg) |
+| ![Kassa](docs/screenshots/game_kassa_id.jpg) | ![Phone](docs/screenshots/game_phone_kassa.jpg) | ![Receipt](docs/screenshots/game_receipt.jpg) |
 
 | Customers at the counter | Characters (Blender render) | Booths (Blender render) |
 | --- | --- | --- |
@@ -39,13 +35,11 @@ The UI is built from Kronkel's own street identity instead of a generic game ski
 - **Colours** come from the logo and the interior: smiley yellow, ink black, sign red, paper cream, with the purple
   LED glow of the shop behind it. Type is Archivo Black for the big words and Barlow / Barlow Condensed for the rest.
 
-## Game modes
+## The game
 
 | Mode (NL / EN / DE) | You are | What you do |
 | --- | --- | --- |
 | **Kassa** / Counter / Kasse | The cashier behind the glass | Check IDs (18+, not expired, photo matches, birthday today counts), take orders, enforce the 5 gram rule, refuse alcohol, ring it up, take PIN or count out change. Three Handhaving strikes and the shop gets closed. |
-| **Bediening** / Service / Bedienung | The floor staff | Seat groups from the door, take orders, run shakes and food from the pass (kitchen open 12:00 to 22:00), bring board games from the shelf, settle the bill, clean up, take the stairs to the rooftop terrace. Bubbles with a mood ring show who needs you. |
-| **Tycoon** | The owner | Each morning buy stock (never more than 500 g, as the law says), hire staff, set prices and ID policy, buy upgrades (pool tables, fireplace lounge, milkshake bar, live music corner, premium shelf, house strain, rooftop terrace...). Watch the day play out, read the report. Weekends, rain, NEC home games, Handhaving inspections and the Vierdaagse in July all matter. |
 
 The Dutch coffeeshop rules (18+ with ID, max 5 gram per person, no alcohol, max 500 gram in stock) are the game
 mechanics. Products, prices and characters are made up.
@@ -63,13 +57,12 @@ or `python3 -m http.server 8080` in the repo root.
 
 ### Controls
 
-- **Touch / mouse**: tap buttons and things in the shop. Drag to pan in Bediening/Tycoon, scroll or pinch to zoom.
+- **Touch / mouse**: tap buttons and things on the counter.
 - **Keyboard**: arrows/WASD move between buttons, Enter/Space press, Esc back/pause, Q/E switch tabs, F fullscreen.
-- **Controller** (Xbox, PlayStation, Switch, generic): stick/d-pad moves focus (also over tables and the pass in
-  Bediening), Ⓐ press, Ⓑ back, Ⓧ/Ⓨ quick actions, bumpers switch tabs, triggers zoom, Start pauses. Rumble on mistakes.
-- **VR**: press *Play in VR*. Point at the floating panel and pull the trigger; point at tables, the pass or the
-  game shelf to send the waiter. Thumbstick snap-turns, B goes back. You stand behind the counter in Kassa mode and
-  on the floor in Bediening.
+- **Controller** (Xbox, PlayStation, Switch, generic): stick/d-pad moves focus, Ⓐ press, Ⓑ back, Ⓧ/Ⓨ quick actions,
+  bumpers switch tabs, Start pauses. Rumble on mistakes.
+- **VR**: press *Play in VR*. Point at the floating panel and pull the trigger. Thumbstick snap-turns, B goes back.
+  You stand behind the counter.
 - **Phone**: Share → *Add to Home Screen* to play fullscreen and offline.
 
 ### Android app (APK)
@@ -100,13 +93,13 @@ src/gui.js            canvas GUI used on screen and on the VR panel (focus navig
 src/input.js          touch, mouse, keyboard, gamepad
 src/xr.js             WebXR session, controllers, floating panel
 src/audio.js          synthesised sound effects and lo-fi music (no audio files)
-src/sim/              pure game logic: cashier.js, server.js, tycoon.js, crowd.js, nav.js (A* pathfinding)
-src/screens/          title, menus, cashier, server, tycoon, results
+src/sim/              pure game logic: cashier.js, crowd.js, nav.js (A* pathfinding)
+src/screens/          title, menus, cashier, results
 assets/layout.json    shop layout shared by Blender and the game (tables, seats, counter, queue...)
 assets/gamedata.json  menu, rules, upgrades, staff, events
 assets/models/        compressed .glb files exported from Blender
 blender/              Blender build scripts + editable .blend files in blender/out/
-tests/                node --test suites that play every mode with a bot and check the translations
+tests/                node --test suites that play a shift with a bot and check the translations
 ```
 
 ### 3D models (Blender)
@@ -149,8 +142,8 @@ How the models are made:
 npm test
 ```
 
-The suites check pathfinding, the rules (ID checks, 5 gram trimming, change), and let bots play full Kassa,
-Bediening and Tycoon runs (60 in-game days, including the 2026 Vierdaagse on 21–24 July). They also check that
+The suites check pathfinding, the rules (ID checks, 5 gram trimming, change), and let a bot play full Kassa
+shifts. They also check that
 Dutch, English and German have exactly the same keys and placeholders.
 
 ### Adding a language

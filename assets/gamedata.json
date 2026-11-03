@@ -223,23 +223,7 @@
    "unlock": "proKitchen"
   }
  ],
- "bar": [
-  { "id": "cola",     "name": "Fritz-Kola",         "price": 3.50, "patience": 40, "recipe": ["glass","fridge"],                     "color": "#1a0f08", "prop": "cola",   "group": "cold" },
-  { "id": "oj",       "name": "Jus d'orange",        "price": 3.50, "patience": 40, "recipe": ["glass","fridge"],                     "color": "#f5820a", "prop": "cola",   "group": "cold" },
-  { "id": "mint_tea", "name": "Verse muntthee",       "price": 3.20, "patience": 40, "recipe": ["cup","syrup"],                        "color": "#3daa5a", "prop": "tea",    "group": "hot"  },
-  { "id": "cappu",    "name": "Cappuccino",           "price": 3.70, "patience": 40, "recipe": ["cup","coffee"],                       "color": "#4a2a10", "prop": "coffee", "group": "hot"  },
-  { "id": "cherry_kola","name":"Cherry Kola",         "price": 4.50, "patience": 55, "recipe": ["glass","fridge","syrup"],              "color": "#7a0c1a", "prop": "cola",   "group": "cold" },
-  { "id": "latte",    "name": "Latte Macchiato",      "price": 4.50, "patience": 55, "recipe": ["cup","fridge","coffee"],               "color": "#c89060", "prop": "coffee", "group": "hot"  },
-  { "id": "hot_choc", "name": "Warme Chocolademelk",  "price": 4.00, "patience": 55, "recipe": ["cup","fridge","cream"],                "color": "#2a1408", "prop": "coffee", "group": "hot"  },
-  { "id": "iced_latte","name":"Iced Latte",           "price": 5.00, "patience": 65, "recipe": ["glass","coffee","fridge","syrup"],     "color": "#c0a078", "prop": "shake",  "group": "cold" },
-  { "id": "chocoloco","name": "Chocoloco",            "price": 5.70, "patience": 65, "recipe": ["glass","fridge","syrup","cream"],      "color": "#3a200e", "prop": "shake",  "group": "cold" },
-  { "id": "straw_shake","name":"Aardbei shake",       "price": 5.60, "patience": 75, "recipe": ["glass","blend","fridge","cream"],      "color": "#e86890", "prop": "shake",  "group": "shake","noLateOrder":true },
-  { "id": "choc_shake","name":"Choco shake",          "price": 5.60, "patience": 75, "recipe": ["glass","blend","syrup","cream"],       "color": "#4e2210", "prop": "shake",  "group": "shake","noLateOrder":true },
-  { "id": "banana_shake","name":"Banana shake",       "price": 5.60, "patience": 75, "recipe": ["glass","blend","fridge","cream"],      "color": "#f3e08a", "prop": "shake",  "group": "shake","noLateOrder":true },
-  { "id": "mango_smooth","name":"Mango smoothie",     "price": 6.00, "patience": 75, "recipe": ["glass","fridge","blend","syrup"],      "color": "#f5a020", "prop": "shake",  "group": "shake","noLateOrder":true },
-  { "id": "kronkel_special","name":"Kronkel Special", "price": 7.60, "patience": 80, "recipe": ["glass","blend","syrup","fridge","cream"],"color":"#9fd36a","prop":"shake",   "group": "shake","noLateOrder":true }
- ],
- "boardGames": [
+  "boardGames": [
   "Schaakbord",
   "Backgammon",
   "Ganzenbord",

@@ -5,8 +5,8 @@ const KEY = 'kronkel-save-v2';
 const DEFAULTS = {
   ageOk: false,
   settings: { music: 0.5, sfx: 0.8, quality: 'auto', haptics: true, lang: null },
-  best: { cashier: 0, bar: 0 },
-  stars: { cashier: 0, bar: 0 },
+  best: { cashier: 0 },
+  stars: { cashier: 0 },
   seenHowto: {},
 };
 
