@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { CashierSim, CHANGE_UNITS } from '../src/sim/cashier.js';
+import { CashierSim, CHANGE_UNITS, multFor, CLEAN_BONUS } from '../src/sim/cashier.js';
 import { Nav, pathLength } from '../src/sim/nav.js';
 import { euro, ageOn, round2, dateText } from '../src/util.js';
 import { setLang, t, td, dictionaries, detectLang } from '../src/i18n.js';
@@ -117,7 +117,10 @@ test('a perfect cashier gets through a shift without strikes', () => {
   const sim = autoCashier(new CashierSim(data, layout, { seed: 7, today: new Date(2026, 9, 23) }));
   assert.equal(sim.stats.strikes, 0);
   assert.ok(sim.stats.served > 20, `served only ${sim.stats.served}`);
-  assert.ok(sim.score() > 0);
+  assert.ok(sim.bestCombo >= 15, `best combo only ${sim.bestCombo}`);
+  assert.equal(sim.stats.perfect, sim.stats.served);
+  assert.equal(sim.score(), sim.points + CLEAN_BONUS);
+  assert.equal(sim.starsFor(sim.score()), 5);
   console.log('cashier perfect score', sim.score(), 'stars', sim.starsFor(sim.score()), sim.stats);
 });
 
@@ -136,4 +139,45 @@ test('the 5 gram rule trims the order to exactly 5 g', () => {
   const grams = lines.filter((l) => sim.products[l.id].unit === 'g').reduce((s, l) => s + l.qty, 0);
   assert.equal(grams, 5);
   assert.ok(lines.some((l) => l.id === 'preroll'));
+});
+
+test('combo multiplier steps up and caps at x5', () => {
+  assert.deepEqual([0, 2, 3, 5, 6, 9, 10, 14, 15, 40].map(multFor), [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
+});
+
+/** Plays until a customer is at the order step, serving everyone before them cleanly. */
+function toOrder(sim) {
+  for (let i = 0; i < 20000 && !(sim.current?.step === 'order' && sim.isValidId(sim.current)); i++) {
+    sim.update(0.1);
+    const c = sim.current;
+    if (c?.step === 'id') sim.checkId(sim.isValidId(c));
+  }
+  return sim.current;
+}
+
+test('a wrong order breaks the combo, a clean sale builds it', () => {
+  const sim = new CashierSim(data, layout, { seed: 21, today: new Date(2026, 9, 23) });
+  sim.combo = 7;
+  const c = toOrder(sim);
+  const combo = sim.combo;
+  sim.clearBag();
+  sim.addItem('lighter', 1);
+  sim.addItem('papers', 3);
+  assert.equal(sim.checkout().ok, false);
+  assert.equal(sim.combo, 0);
+  assert.equal(c.clean, false);
+  assert.ok(sim.events.some((e) => e.type === 'comboBreak' && e.combo === combo));
+  sim.clearBag();
+  for (const l of sim.wantLines(c)) sim.addItem(l.id, l.qty);
+  assert.ok(sim.checkout().ok);
+  if (c.pay === 'pin') {
+    sim.payPin();
+    for (let i = 0; i < 20 && sim.current === c; i++) sim.update(0.1);
+  } else {
+    sim.addChange(round2(c.cashGiven - c.total));
+    sim.giveChange();
+  }
+  assert.equal(sim.combo, 1);
+  const sale = sim.events.filter((e) => e.type === 'points').pop();
+  assert.notEqual(sale.grade, 'perfect', 'a customer with a mistake is never perfect');
 });

@@ -1,6 +1,8 @@
-// Local save (high scores, settings, tycoon progress). Storage can be unavailable (private mode,
+// Local save (high scores, settings). Storage can be unavailable (private mode,
 // blocked site data), so every access is wrapped and the game keeps working from memory.
 const KEY = 'kronkel-save-v2';
+// Bump when the score formula changes so old records don't stand against new points.
+const SCORE_VERSION = 2;
 
 const DEFAULTS = {
   ageOk: false,
@@ -8,6 +10,7 @@ const DEFAULTS = {
   best: { cashier: 0 },
   stars: { cashier: 0 },
   seenHowto: {},
+  scoreVersion: SCORE_VERSION,
 };
 
 let mem = null;
@@ -21,6 +24,11 @@ export function loadSave() {
     data = null;
   }
   mem = merge(structuredClone(DEFAULTS), data || {});
+  if (data && data.scoreVersion !== SCORE_VERSION) {
+    mem.best = structuredClone(DEFAULTS.best);
+    mem.stars = structuredClone(DEFAULTS.stars);
+    mem.scoreVersion = SCORE_VERSION;
+  }
   return mem;
 }
 

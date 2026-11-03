@@ -44,6 +44,17 @@ The UI is built from Kronkel's own street identity instead of a generic game ski
 The Dutch coffeeshop rules (18+ with ID, max 5 gram per person, no alcohol, max 500 gram in stock) are the game
 mechanics. Products, prices and characters are made up.
 
+### Scoring
+
+It plays like an arcade game. Every customer you get through without a mistake builds your **combo**, and the combo
+multiplies your points: x2 at 3 in a row, x3 at 6, x4 at 10, x5 at 15 (the screen edges start burning: *on fire*).
+A wrong order, short change, a walkout or a strike breaks it. Each sale is graded PERFECT, NICE or OK on speed, and a
+customer with a slip-up is never PERFECT. Catching a minor or a fake ID scores big and counts for the combo. A whole
+shift without strikes adds a 2,500 bonus. Your score rolls up live in the corner, flips to *New best!* the moment you
+pass your record, and the receipt tells you how many points the next smiley is away.
+
+![x5 combo, on fire](docs/screenshots/game_kassa_fire.jpg)
+
 ## Play it
 
 Any static web server works; there's no build step.

@@ -1,16 +1,20 @@
 import { C } from '../gui.js';
 import { BaseScreen, receipt, dashes, rline, RECEIPT } from './common.js';
 import { sfx } from '../audio.js';
-import { clamp, dateText, clockText } from '../util.js';
+import { clamp, dateText, clockText, num } from '../util.js';
 import { t } from '../i18n.js';
 
-/** End of a Kassa / Bediening shift, printed as a Kronkel receipt. */
+/** End of a Kassa shift, printed as a Kronkel receipt. */
 export class ResultsScreen extends BaseScreen {
   enter() {
     this.t = 0;
+    // last customer's floating points and tapes belong to the shift, not the receipt
+    this.game.gui.floats.length = 0;
+    this.game.gui.toasts.length = 0;
     this.printed = new Date();
     const p = this.params;
-    if (p.stars >= 3) sfx.fanfare();
+    if (p.newBest) sfx.record();
+    else if (p.stars >= 3) sfx.fanfare();
     else if (p.closed) sfx.sad();
     else sfx.ok();
   }
@@ -37,10 +41,10 @@ export class ResultsScreen extends BaseScreen {
     // Fit the receipt to the screen: drop the logo and tighten the lines when it's short (phone landscape, 720p).
     const avail = (gui.h - gui.safe.top - gui.safe.bottom - bh - 44 * S) / S;
     const n = p.lines.length;
-    const compact = 188 + n * 23 + 182 > avail;
+    const compact = 188 + n * 23 + 198 > avail;
     const head = compact ? 124 : 188;
-    const lh = clamp((avail - head - 182) / n, 17, 23);
-    const h = Math.min(avail, head + n * lh + 182) * S;
+    const lh = clamp((avail - head - 198) / n, 17, 23);
+    const h = Math.min(avail, head + n * lh + 198) * S;
     // receipt slides out of the printer
     const slide = 1 - Math.pow(1 - clamp(this.t * 1.6, 0, 1), 3);
     const x = (gui.w - w) / 2;
@@ -69,8 +73,10 @@ export class ResultsScreen extends BaseScreen {
     dashes(gui, ix, ly - 8 * S, iw);
     ly += 18 * S;
     rline(gui, ix, ly, iw, t('res.score'), '', { size: 20, bold: true });
-    const shown = Math.round(p.score * clamp(this.t * 1.2, 0, 1));
-    gui.text(String(shown), ix + iw, ly + 2 * S, 30 * S, { font: 'display', color: C.ink, align: 'right' });
+    const k = clamp(this.t * 0.9, 0, 1);
+    const shown = Math.round(p.score * (1 - Math.pow(1 - k, 3)));
+    gui.text(num(shown), ix + iw, ly + 2 * S, 30 * S * (k < 1 ? 1 + Math.sin(this.t * 40) * 0.02 : 1), { font: 'display',
+      color: C.ink, align: 'right' });
     const scoreY = ly;
     ly += 26 * S;
     gui.ctx.fillStyle = C.ink;
@@ -79,9 +85,13 @@ export class ResultsScreen extends BaseScreen {
     gui.smileys(x + w / 2 - 78 * S, ly + 15 * S, 14 * S, Math.min(p.stars, Math.floor(this.t * 3)));
     ly += 50 * S;
     if (p.newBest && this.t > 1) {
-      gui.stamp(t('res.newRecord'), ix + iw * 0.5, scoreY - 8 * S, 18 * S, C.red, -0.08, clamp((this.t - 1) * 4, 0, 1));
+      gui.stamp(t('res.newRecord'), ix + iw * 0.42, scoreY - 8 * S, 15 * S, C.red, -0.08, clamp((this.t - 1) * 4, 0, 1));
     } else {
-      gui.text(t('res.record', { n: p.best }), x + w / 2, ly - 4 * S, 12 * S, { font: RECEIPT, color: C.ink, align: 'center' });
+      gui.text(t('res.record', { n: num(p.best) }), x + w / 2, ly - 4 * S, 12 * S, { font: RECEIPT, color: C.ink, align: 'center' });
+    }
+    if (p.next !== null && p.next !== undefined && this.t > 1.2) {
+      gui.text(p.next > 0 ? t('res.nextStar', { n: num(p.next) }) : t('res.maxStars'), x + w / 2, ly + 12 * S, 12.5 * S,
+        { font: RECEIPT, weight: 700, color: C.red, align: 'center', max: iw });
     }
     // barcode
     const c = gui.ctx;

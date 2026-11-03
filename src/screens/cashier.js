@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { C } from '../gui.js';
 import { BaseScreen, hud, portrait, receipt, dashes, RECEIPT } from './common.js';
-import { CashierSim, CHANGE_UNITS } from '../sim/cashier.js';
+import { CashierSim, CHANGE_UNITS, COMBO_STEPS, MAX_MULT, STAR_SCORES, multFor } from '../sim/cashier.js';
 import { Crowd } from '../sim/crowd.js';
-import { clamp, clockText, dateText, euro, rng } from '../util.js';
+import { clamp, clockText, dateText, euro, num, rng } from '../util.js';
 import { sfx } from '../audio.js';
 import { t } from '../i18n.js';
 
@@ -30,6 +30,13 @@ export class CashierScreen extends BaseScreen {
     this.lastCall = false;
     this.stampT = 9;
     this.v3 = new THREE.Vector3();
+    // arcade layer: rolling score, bump on points, screen shake, big centre popups
+    this.shown = 0;
+    this.bump = 0;
+    this.shake = 0;
+    this.pops = [];
+    this.best = g.save.best.cashier;
+    this.passedBest = false;
     if (!g.save.seenHowto.kassa) {
       g.save.seenHowto.kassa = true;
       g.persist();
@@ -89,7 +96,18 @@ export class CashierScreen extends BaseScreen {
       this.crowd.update(dt);
     }
     this.flash = Math.max(0, this.flash - dt * 2);
+    this.bump = Math.max(0, this.bump - dt * 4);
+    this.shake = Math.max(0, this.shake - dt * 3);
+    this.shown += (sim.points - this.shown) * Math.min(1, dt * 9);
+    if (Math.abs(sim.points - this.shown) < 1) this.shown = sim.points;
+    for (const p of this.pops) p.t += dt;
+    this.pops = this.pops.filter((p) => p.t < p.dur);
     for (const e of sim.events.splice(0)) this._event(e);
+    if (!this.passedBest && this.best > 0 && sim.points > this.best) {
+      this.passedBest = true;
+      this._pop(t('arc.record'), C.yellow, { size: 40, dur: 2 });
+      sfx.record();
+    }
     if (!this.lastCall && sim.hour >= sim.closeHour) {
       this.lastCall = true;
       this.toast(t('cash.lastCall'), C.yellow);
@@ -130,9 +148,38 @@ export class CashierScreen extends BaseScreen {
     this.world.syncProps(list);
   }
 
+  /** Big centre-screen word that punches in and fades: PERFECT!, x3 COMBO!, COMBO BROKEN... */
+  _pop(text, color, { size = 34, dur = 1.1 } = {}) {
+    this.pops.unshift({ text, color, size, dur, t: 0, tilt: (Math.random() - 0.5) * 0.12 });
+    if (this.pops.length > 3) this.pops.length = 3;
+  }
+
   _event(e) {
     const input = this.game.input;
     switch (e.type) {
+      case 'points': {
+        this.bump = 1;
+        this.floatN = ((this.floatN || 0) + 1) % 3;
+        const pos = new THREE.Vector3(3.8 + (this.floatN - 1) * 0.32, 1.9 + this.floatN * 0.08, -2.8);
+        this.game.gui.floatWorld(`+${num(e.pts)}`, pos, e.grade ? C.yellow : C.paper);
+        if (e.grade) {
+          const col = { perfect: C.yellow, catch: C.yellow, nice: C.paper, ok: C.dim }[e.grade];
+          this._pop(t(`arc.${e.grade}`), col, { size: e.grade === 'ok' ? 26 : 36 });
+          if (e.combo >= 2) sfx.combo(e.combo);
+        }
+        break;
+      }
+      case 'multUp':
+        this._pop(e.mult >= MAX_MULT ? t('arc.onFire') : t('arc.mult', { n: e.mult }), e.mult >= MAX_MULT ? C.red : C.pink,
+          { size: 44, dur: 1.5 });
+        sfx.multUp(e.mult);
+        input.rumble(0.3, 0.5, 120);
+        break;
+      case 'comboBreak':
+        if (e.combo >= 3) this._pop(t('arc.comboBreak'), C.red, { size: 34, dur: 1.3 });
+        sfx.comboBreak();
+        this.shake = Math.max(this.shake, e.combo >= 6 ? 1 : 0.6);
+        break;
       case 'door':
         sfx.door();
         break;
@@ -149,6 +196,7 @@ export class CashierScreen extends BaseScreen {
         sfx.error();
         input.rumble(0.9, 0.6, 350);
         this.flash = 1;
+        this.shake = 1.2;
         this.toast(t('cash.strike', { n: this.sim.stats.strikes, text: e.text }), C.red);
         break;
       case 'wrongRefusal':
@@ -164,9 +212,6 @@ export class CashierScreen extends BaseScreen {
       case 'sale': {
         sfx.cash();
         this.mascot.react('good');
-        const pos = new THREE.Vector3(3.8, 1.9, -2.8);
-        this.game.gui.floatWorld(`+${euro(e.total)}`, pos, C.yellow);
-        if (e.tip > 0) this.game.gui.floatWorld(t('cash.tipFloat', { amt: euro(e.tip) }), pos.clone().add(new THREE.Vector3(0.45, -0.3, 0)), C.paper);
         break;
       }
       case 'pin':
@@ -184,10 +229,12 @@ export class CashierScreen extends BaseScreen {
     if (this.done) return;
     this.done = true;
     const g = this.game;
-    const s = this.sim.stats;
-    const score = this.sim.score();
+    const sim = this.sim;
+    const s = sim.stats;
+    const score = sim.score();
     const closed = this.sim.reason === 'closed';
-    const stars = closed ? Math.min(1, this.sim.starsFor(score)) : this.sim.starsFor(score);
+    const stars = closed ? Math.min(1, sim.starsFor(score)) : sim.starsFor(score);
+    const next = closed ? null : (STAR_SCORES.find((n) => n > score) ?? 0) - score;
     const best = g.save.best.cashier;
     const newBest = score > best;
     if (newBest) g.save.best.cashier = score;
@@ -197,11 +244,12 @@ export class CashierScreen extends BaseScreen {
       mode: 'cashier', closed,
       title: t(closed ? 'res.closed' : 'res.receipt'),
       subtitle: t(closed ? 'res.closedSub' : 'res.cashierSub'),
-      score, stars, best: newBest ? score : best, newBest, vrAnchor: this.vrAnchor(),
+      score, stars, best: newBest ? score : best, newBest, vrAnchor: this.vrAnchor(), next,
       lines: [
-        [t('res.served'), s.served], [t('res.revenue'), euro(s.revenue)], [t('res.tips'), euro(s.tips)],
+        [t('res.served'), s.served], [t('res.perfect'), s.perfect], [t('res.bestCombo'), sim.bestCombo],
         [t('res.refusedOk'), s.refusedOk], [t('res.wrongRefusals'), s.wrongRefusals],
-        [t('res.walkouts'), s.walkouts], [t('res.strikes'), `${s.strikes}/3`],
+        [t('res.walkouts'), s.walkouts], [t('res.strikes'), `${s.strikes}/3`], [t('res.revenue'), euro(s.revenue)],
+        ...(sim.cleanBonus() ? [[t('res.cleanBonus'), `+${num(sim.cleanBonus())}`]] : []),
       ],
     });
   }
@@ -211,16 +259,21 @@ export class CashierScreen extends BaseScreen {
     const S = gui.S;
     const sim = this.sim;
     const c = sim.current;
+    const ctx = gui.ctx;
     if (this.flash > 0) {
-      gui.ctx.fillStyle = `rgba(213,31,43,${this.flash * 0.28})`;
-      gui.ctx.fillRect(0, 0, gui.w, gui.h);
+      ctx.fillStyle = `rgba(213,31,43,${this.flash * 0.28})`;
+      ctx.fillRect(0, 0, gui.w, gui.h);
     }
+    const mult = multFor(sim.combo);
+    if (mult >= MAX_MULT) this._fireGlow(gui);
+    ctx.save();
+    if (this.shake > 0) ctx.translate((Math.random() - 0.5) * 14 * S * this.shake, (Math.random() - 0.5) * 10 * S * this.shake);
     const strikes = sim.stats.strikes;
     const barBottom = hud(gui, this, [
-      { label: t('hud.time'), value: clockText(sim.hour), color: sim.hour >= 24 ? C.red : C.ink },
-      { label: t('hud.revenue'), value: euro(sim.stats.revenue, 0) },
-      { label: t('hud.tips'), value: euro(sim.stats.tips, 0) },
+      { label: t('hud.score'), w: 132, fill: mult >= MAX_MULT ? C.yellow : C.paper,
+        draw: (x, y, w, h) => this._score(gui, x, y, w, h, mult) },
       { label: t('hud.strikes'), w: 98, draw: (x, y, w) => this._strikes(gui, x, y, w, strikes) },
+      { label: t('hud.time'), value: clockText(sim.hour), color: sim.hour >= 24 ? C.red : C.ink },
       { label: t('hud.queue'), value: Math.max(0, sim.queue.length - (c ? 1 : 0)), w: 58 },
     ], { onPause: () => this.onPause() });
     const pad = 12 * S;
@@ -241,8 +294,74 @@ export class CashierScreen extends BaseScreen {
       else if (this.stamped && this.stampT < 1.1) this._idCard(gui, left, top + 92 * S, idW, this.stamped.c, true);
       this._mainPanel(gui, right - pw, top, pw, bottom - top);
     }
+    // pops go where nothing important is: above the order panel on phones, over the counter top in landscape
+    const popX = portraitMode ? gui.w / 2 : (left + right - Math.min(450 * S, (right - left) * 0.48) - 16 * S) / 2;
+    this._drawPops(gui, popX, portraitMode ? bottom - Math.min(gui.h * 0.56, 530 * S) - 26 * S : bottom - 24 * S);
+    ctx.restore();
     this.drawModal(gui);
     this.drawPause(gui);
+  }
+
+  /** Score sticker: rolling number, x-multiplier tag on the corner, combo bar to the next multiplier. */
+  _score(gui, x, y, w, h, mult) {
+    const S = gui.S;
+    const sim = this.sim;
+    const record = this.passedBest && Math.floor(gui.time * 4) % 2 === 0;
+    gui.text(this.passedBest ? t('hud.newBest') : t('hud.score'), x + w / 2, y + 15 * S, 11.5 * S,
+      { font: 'label', color: record ? C.ink : C.red, align: 'center', upper: true, max: w - 12 * S });
+    gui.text(num(this.shown), x + w / 2, y + 39 * S, 21 * S * (1 + this.bump * 0.22), { font: 'display', color: C.ink,
+      align: 'center', max: w - 12 * S });
+    const lo = mult > 1 ? COMBO_STEPS[mult - 2] : 0;
+    const hi = COMBO_STEPS[mult - 1];
+    const frac = hi ? (sim.combo - lo) / (hi - lo) : 1;
+    gui.bar(x + 8 * S, y + h - 8 * S, w - 16 * S, 4 * S, frac, mult >= MAX_MULT ? C.red : C.pink, 'rgba(18,16,21,0.15)');
+    if (mult > 1) {
+      const pulse = mult >= MAX_MULT ? 1 + Math.sin(gui.time * 12) * 0.08 : 1;
+      const tw = 42 * S * pulse;
+      const th = 28 * S * pulse;
+      const tx = x + w - tw * 0.55;
+      const ty = y - th * 0.55;
+      gui.tilted(tx + tw / 2, ty + th / 2, 0.14, () => {
+        gui.sticker(tx, ty, tw, th, { fill: mult >= MAX_MULT ? C.red : C.ink, r: 6, shadow: 0, outline: 2 });
+        gui.text(`x${mult}`, tx + tw / 2, ty + th * 0.74, 18 * S * pulse, { font: 'display', color: C.yellow, align: 'center' });
+      });
+    }
+    if (sim.combo >= 2) {
+      gui.text(`${t('arc.combo')} ${sim.combo}`, x + 8 * S, y + h + 15 * S, 12 * S, { font: 'label', color: C.yellow,
+        upper: true, stroke: C.ink, strokeW: 4 * S });
+    }
+  }
+
+  /** At x5 the screen edges burn: a pulsing orange vignette. */
+  _fireGlow(gui) {
+    const ctx = gui.ctx;
+    const a = 0.5 + Math.sin(gui.time * 6) * 0.12;
+    const r = Math.hypot(gui.w, gui.h) / 2;
+    const g = ctx.createRadialGradient(gui.w / 2, gui.h / 2, r * 0.5, gui.w / 2, gui.h / 2, r);
+    g.addColorStop(0, 'rgba(255,110,0,0)');
+    g.addColorStop(0.6, `rgba(255,110,0,${a * 0.45})`);
+    g.addColorStop(1, `rgba(230,40,10,${a})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, gui.w, gui.h);
+  }
+
+  /** Newest pop sits on `base`, older ones are pushed up above it. */
+  _drawPops(gui, cx, base) {
+    const S = gui.S;
+    let y = base;
+    for (const p of this.pops) {
+      const punch = 1 + Math.max(0, 0.16 - p.t) * 5;
+      const alpha = clamp(Math.min(p.t * 12, (p.dur - p.t) * 4), 0, 1);
+      const size = p.size * S * punch;
+      gui.ctx.save();
+      gui.ctx.globalAlpha = alpha;
+      gui.tilted(cx, y - size * 0.35, p.tilt, () => {
+        gui.text(p.text, cx, y - p.t * 14 * S, size, { font: 'display', color: p.color, align: 'center', stroke: C.ink,
+          strokeW: 7 * S, max: gui.w - 30 * S });
+      });
+      gui.ctx.restore();
+      y -= p.size * S * 1.15;
+    }
   }
 
   _strikes(gui, x, y, w, n) {

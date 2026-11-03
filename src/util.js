@@ -40,6 +40,11 @@ export function euro(n, decimals = 2) {
   return `${neg ? '-' : ''}€${grouped}${d !== undefined ? (en ? '.' : ',') + d : ''}`;
 }
 
+/** Whole number with the language's thousands separator: 12.340 (nl, de) or 12,340 (en). */
+export function num(n) {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, getLang() === 'en' ? ',' : '.');
+}
+
 // Game clock: hours as a float, 25.5 = 01:30 the next night.
 export function clockText(h) {
   const hh = Math.floor(h) % 24;

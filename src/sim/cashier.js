@@ -6,6 +6,16 @@ import { t as tr, tl, td } from '../i18n.js';
 
 export const NOTES = [100, 50, 20, 10, 5];
 export const CHANGE_UNITS = [50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1];
+// Clean customers in a row needed for x2, x3, x4, x5 points.
+export const COMBO_STEPS = [3, 6, 10, 15];
+export const MAX_MULT = COMBO_STEPS.length + 1;
+export const CLEAN_BONUS = 2500;
+// Score needed for 1..5 smileys.
+export const STAR_SCORES = [8000, 20000, 45000, 80000, 120000];
+
+export function multFor(combo) {
+  return 1 + COMBO_STEPS.filter((n) => combo >= n).length;
+}
 
 export class CashierSim {
   constructor(data, layout, { seed = Date.now(), today = new Date(), shiftSeconds = 240, upgrades = null } = {}) {
@@ -26,7 +36,10 @@ export class CashierSim {
     this.time = 0;
     this.spawnIn = 2;
     this.stats = { revenue: 0, tips: 0, served: 0, refusedOk: 0, wrongRefusals: 0, strikes: 0, walkouts: 0,
-      mistakes: 0, changeLost: 0, ruleCalls: 0 };
+      mistakes: 0, changeLost: 0, ruleCalls: 0, perfect: 0 };
+    this.points = 0;
+    this.combo = 0;
+    this.bestCombo = 0;
     this.events = [];
     this.over = false;
     this.reason = null;
@@ -140,7 +153,7 @@ export class CashierSim {
       x: spawnX, z: spawnZ, yaw: 0, path: [], level: 0,
       phase: 'enter', step: null, slot: -1,
       patience: 34 + r.range(0, 12) - diff * 8, maxPatience: 0, queuePatience: 95 + r.range(0, 30),
-      bag: {}, change: 0, cashGiven: 0, payTimer: 0, said: null, saidT: 0, mood: 1,
+      bag: {}, change: 0, cashGiven: 0, payTimer: 0, said: null, saidT: 0, mood: 1, clean: true,
       greeting: r.pick(tl('line.greet')), anim: 'Walk',
     };
   }
@@ -189,12 +202,14 @@ export class CashierSim {
         this._strike(tr(c.kind === 'minor' ? 'strike.minor' : c.kind === 'expired' ? 'strike.expired' : 'strike.fake'));
       } else {
         this.emit('ok');
+        this._award(50);
       }
       c.step = 'order';
       const beer = c.alcohol && !c.saidNoAlcohol ? ` ${this.rng.pick(tl('line.alcohol'))}` : tr('order.askEnd');
       this.say(c, tr('order.ask', { greet: c.greeting, order: this.orderText(c), end: beer }));
     } else if (valid) {
       this.stats.wrongRefusals++;
+      this._break(c);
       this.say(c, tr(c.kind === 'birthday' ? 'say.birthday' : 'say.idFine'));
       this.emit('wrongRefusal', { text: tr(c.kind === 'birthday' ? 'msg.wasBirthday' : 'msg.wasValid') });
       this._leave(c, true);
@@ -202,6 +217,7 @@ export class CashierSim {
       this.stats.refusedOk++;
       this.say(c, tr(c.kind === 'minor' ? 'say.minorRefused' : 'say.refused'));
       this.emit('refusedOk', { text: tr('msg.goodCatch', { why: tr(`why.${c.kind}`) }) });
+      this._award(400, { combo: true, grade: 'catch' });
       this._leave(c, false);
     }
   }
@@ -214,20 +230,24 @@ export class CashierSim {
         c.saidMax5 = true;
         this.stats.ruleCalls++;
         this.emit('ok', { text: tr('msg.max5') });
+        this._award(100);
         this.say(c, tr('say.max5ok', { order: this.orderText(c) }));
       } else {
         this.say(c, tr('say.under5'));
         c.patience -= 3;
+        c.clean = false;
       }
     } else if (rule === 'alcohol') {
       if (c.alcohol && !c.saidNoAlcohol) {
         c.saidNoAlcohol = true;
         this.stats.ruleCalls++;
         this.emit('ok', { text: tr('msg.noAlcohol') });
+        this._award(100);
         this.say(c, tr('say.noBeerOk', { order: this.orderText(c) }));
       } else {
         this.say(c, tr('say.noAlcAsked'));
         c.patience -= 3;
+        c.clean = false;
       }
     }
   }
@@ -271,6 +291,7 @@ export class CashierSim {
         if (!legalSame) {
           this.stats.mistakes++;
           c.patience -= 6;
+          this._break(c);
           this.say(c, tr('say.wrong', { order: this.orderText(c) }));
           this.emit('mistake', { text: tr('msg.wrongOrder') });
           return { ok: false, reason: 'mismatch' };
@@ -280,6 +301,7 @@ export class CashierSim {
     }
     if (c.alcohol && !c.saidNoAlcohol) {
       c.patience -= 4;
+      c.clean = false;
       this.say(c, tr('say.noBeer'));
     }
     c.step = 'pay';
@@ -320,12 +342,14 @@ export class CashierSim {
     }
     if (diff > 0) {
       this.stats.changeLost = round2(this.stats.changeLost + diff);
+      this._break(c);
       this.emit('mistake', { text: tr('msg.overChange', { amt: euro(diff) }) });
       this._complete(c);
       return { ok: true, over: diff };
     }
     this.stats.mistakes++;
     c.patience -= 6;
+    this._break(c);
     this.say(c, tr('say.missing', { amt: euro(-diff) }));
     this.emit('mistake', { text: tr('msg.notEnough') });
     return { ok: false, short: -diff };
@@ -345,6 +369,7 @@ export class CashierSim {
 
   _strike(text) {
     this.stats.strikes++;
+    this._break(this.current);
     this.emit('strike', { text });
     if (this.stats.strikes >= 3) {
       this.over = true;
@@ -358,9 +383,33 @@ export class CashierSim {
     this.stats.revenue = round2(this.stats.revenue + c.total);
     this.stats.tips = round2(this.stats.tips + tip);
     this.stats.served++;
+    const grade = c.clean && frac >= 0.55 ? 'perfect' : frac >= 0.3 ? 'nice' : 'ok';
+    if (grade === 'perfect') this.stats.perfect++;
     this.say(c, this.rng.pick(tl('line.thanks')));
     this.emit('sale', { total: c.total, tip });
+    this._award(100 + c.total * 10 + frac * 300 + (grade === 'perfect' ? 250 : 0), { combo: true, grade });
     this._leave(c, false);
+  }
+
+  /** Points times the combo multiplier. `combo` counts this as one more clean customer in a row. */
+  _award(base, { combo = false, grade = null } = {}) {
+    const before = multFor(this.combo);
+    if (combo) {
+      this.combo++;
+      this.bestCombo = Math.max(this.bestCombo, this.combo);
+    }
+    const mult = multFor(this.combo);
+    const pts = Math.round((base * mult) / 10) * 10;
+    this.points += pts;
+    this.emit('points', { pts, mult, combo: this.combo, grade });
+    if (mult > before) this.emit('multUp', { mult });
+    return pts;
+  }
+
+  _break(c) {
+    if (c) c.clean = false;
+    if (this.combo >= 2) this.emit('comboBreak', { combo: this.combo });
+    this.combo = 0;
   }
 
   _leave(c, angry) {
@@ -460,6 +509,7 @@ export class CashierSim {
       c.patience -= dt;
       if (c.patience <= 0) {
         this.stats.walkouts++;
+        this._break(c);
         this.say(c, this.rng.pick(tl('line.angry')));
         this.emit('walkout', { text: tr('msg.tired', { name: c.first }) });
         this._leave(c, true);
@@ -468,20 +518,24 @@ export class CashierSim {
       c.queuePatience -= dt;
       if (c.queuePatience <= 0) {
         this.stats.walkouts++;
+        this._break(c);
         this.emit('walkout', { text: tr('msg.leftQueue') });
         this._leave(c, true);
       }
     }
   }
 
+  /** Bonus for a whole shift without a single strike (only when the shop stayed open). */
+  cleanBonus() {
+    return this.stats.strikes === 0 && this.reason !== 'closed' ? CLEAN_BONUS : 0;
+  }
+
   score() {
-    const s = this.stats;
-    return Math.max(0, Math.round(s.revenue + s.tips * 2 + s.refusedOk * 8 + s.ruleCalls * 4 - s.wrongRefusals * 6 - s.walkouts * 4 -
-      s.strikes * 30 - s.mistakes * 2 - s.changeLost));
+    return this.points + this.cleanBonus();
   }
 
   starsFor(score) {
-    return [150, 400, 700, 1000, 1350].filter((t) => score >= t).length;
+    return STAR_SCORES.filter((t) => score >= t).length;
   }
 }
 

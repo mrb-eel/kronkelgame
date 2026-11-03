@@ -3,7 +3,7 @@ import { BaseScreen, vrButton, langChips } from './common.js';
 import { t } from '../i18n.js';
 import { Crowd } from '../sim/crowd.js';
 import { Nav } from '../sim/nav.js';
-import { rng } from '../util.js';
+import { num, rng } from '../util.js';
 import { sfx } from '../audio.js';
 
 function alleyLife(screen) {
@@ -141,7 +141,7 @@ export class TitleScreen extends BaseScreen {
   }
 
   /** Big tilted sticker card for a game mode: number tile, title, one-line pitch. */
-  _mode(gui, x, y, w, h, { id, title, sub, fill, tilt, stars, onClick, num }) {
+  _mode(gui, x, y, w, h, { id, title, sub, fill, tilt, stars, onClick, tag, tape }) {
     const S = gui.S;
     const pressed = gui.pressedId === id && gui.pointer.down && gui._inside(x, y, w, h);
     const hover = !gui.pointer.touch && gui._inside(x, y, w, h);
@@ -157,7 +157,7 @@ export class TitleScreen extends BaseScreen {
       gui.ctx.fillStyle = C.ink;
       gui.rr(tx, tyy, ts, ts, 8 * S);
       gui.ctx.fill();
-      gui.text(num, tx + ts / 2, tyy + ts * 0.68, ts * 0.5, { font: 'display', align: 'center',
+      gui.text(tag, tx + ts / 2, tyy + ts * 0.68, ts * 0.5, { font: 'display', align: 'center',
         color: fill === C.yellow ? C.yellow : C.red });
       const lx = tx + ts + 14 * S;
       const titleSize = Math.min(30 * S, h * 0.36);
@@ -171,6 +171,7 @@ export class TitleScreen extends BaseScreen {
       if (stars) gui.smileys(ox + w - 5 * 11 * S * 2.25 - 14 * S, oy + 20 * S, 11 * S, stars);
       gui.icon('play', ox + w - 26 * S, oy + h / 2 + (stars ? 8 * S : 0), 18 * S, C.ink);
     });
+    if (tape) gui.tape(tape, x + w * 0.42, y + 2 * S, { size: 14 * S, color: C.red, textColor: C.paper, tilt: 0.05 });
     gui.region(x, y, w, h, onClick, { id, focusable: true, r: 12 * S });
   }
 
@@ -200,7 +201,7 @@ export class TitleScreen extends BaseScreen {
     const free = gui.h - gui.safe.bottom - footer - extra - (markBottom + 14 * S);
     const bh = Math.max(minCard * 0.85, Math.min(portrait ? 132 * S : 128 * S, free));
     let y = portrait ? gui.h - gui.safe.bottom - footer - extra - bh : markBottom + 14 * S;
-    this._mode(gui, sl, y, colW, bh, { id: 'm-cashier', num: '01', title: t('mode.cashier'), fill: C.yellow, tilt: -0.012,
+    this._mode(gui, sl, y, colW, bh, { id: 'm-cashier', tag: '01', tape: save.best.cashier ? t('res.record', { n: num(save.best.cashier) }) : null, title: t('mode.cashier'), fill: C.yellow, tilt: -0.012,
       sub: t('mode.cashier.sub'), stars: save.stars.cashier, onClick: () => g.setScreen('cashier') });
     y += bh + 16 * S;
     const half = (colW - 12 * S) / 2;

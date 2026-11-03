@@ -160,6 +160,36 @@ export const sfx = {
     const t = ctx.currentTime;
     [392, 370, 349, 311].forEach((f, i) => tone(f, t + i * 0.18, 0.3, { type: 'triangle', vol: 0.12 }));
   },
+  /** One note up the A-minor pentatonic per clean customer in a row, so a long combo climbs. */
+  combo(n) {
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.06;
+    const steps = [0, 3, 5, 7, 10];
+    const k = Math.min(n, 20) - 1;
+    const m = 69 + Math.floor(k / 5) * 12 + steps[k % 5];
+    const f = 440 * Math.pow(2, (m - 69) / 12);
+    tone(f, t, 0.22, { type: 'square', vol: 0.05, filter: 3200 });
+    tone(f * 2, t + 0.05, 0.25, { type: 'triangle', vol: 0.06 });
+  },
+  multUp(mult) {
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.12;
+    const root = 523 * Math.pow(2, (mult - 2) * 2 / 12);
+    [1, 1.26, 1.5, 2].forEach((r, i) => tone(root * r, t + i * 0.06, 0.28, { type: 'square', vol: 0.06, filter: 4200 }));
+    noise(t, 0.3, { vol: 0.06, hp: 5000 });
+  },
+  comboBreak() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    tone(620, t, 0.45, { type: 'sawtooth', vol: 0.07, glide: 0.25, filter: 2000 });
+    noise(t, 0.2, { vol: 0.12, lp: 900 });
+  },
+  record() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [784, 988, 1175, 1568].forEach((f, i) => tone(f, t + i * 0.09, 0.4, { type: 'square', vol: 0.06, filter: 5000 }));
+    tone(1568, t + 0.36, 0.8, { type: 'triangle', vol: 0.1 });
+  },
 };
 
 // ---------------------------------------------------------------------------
